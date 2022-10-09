@@ -253,6 +253,77 @@ export function removeColumn(model: ModelPrivate): boolean {
   return true;
 }
 
+export function createAlignedEnvironment(model: ModelPrivate): boolean {
+  if (!contentWillChange(model, { inputType: 'insertLineBreak' })) return false;
+  // do custom stuff with enter
+  let atom = model.at(model.position);
+
+  console.log(model);
+
+  while (
+    atom &&
+    atom.parent &&
+    !(Array.isArray(atom.treeBranch) && atom.parent instanceof ArrayAtom)
+  )
+    atom = atom.parent!;
+
+  if (Array.isArray(atom?.treeBranch) && atom.parent instanceof ArrayAtom) {
+    // add row if cursor is at end of row at bottom of array
+    const arrayAtom = atom.parent;
+    // ensure we are dealing with aligned environment
+    if (arrayAtom.colSeparationType === 'align') {
+      // treeBranch[1] (column) is the second column in the aligned environment
+      if (
+        atom.treeBranch[1] === 1 &&
+        atom.treeBranch[0] === arrayAtom.rowCount - 1
+      ) {
+        arrayAtom.addRowAfter(atom.treeBranch[0]);
+        const pos = model.offsetOf(
+          arrayAtom.getCell(atom.treeBranch[0] + 1, 0)![0]
+        );
+        model.setSelection(pos, pos + 1);
+      } else {
+        // move cursor down one row
+        const belowCell = arrayAtom.getCell(
+          atom.treeBranch[0] + 1,
+          atom.treeBranch[1]
+        );
+        if (belowCell) {
+          const pos = model.offsetOf(belowCell[belowCell.length - 1]);
+          model.setSelection(pos, pos + 1);
+        }
+      }
+    }
+  } else {
+    // todo: toggle an easy mode? need to make navigation and adding equals etc custom while in this mode
+    // re-flow line into an ArrayAtom aligned environment
+    let latex = model.mathfield.getValue();
+    // split latex into left and right based on aligned delimiter
+    if (splitRegex.test(latex)) {
+      latex = latex.replace(splitRegex, '$1&$2$3');
+    }
+    const alignedLatex = `\\begin{aligned}${latex} \\\\ \\placeholder{} & \\placeholder{} \\end{aligned}`;
+    model.mathfield.setValue(alignedLatex);
+    // cursor is coincidentally placed in the correct place
+  }
+
+  // end custom stuff
+  contentDidChange(model, { inputType: 'insertLineBreak' });
+  return true;
+}
+
+export const alignedDelimiters = [
+  '=',
+  '\\gt',
+  '\\lt',
+  '\\geq',
+  '\\leq',
+  '\\geqslant',
+  '\\leqslant',
+];
+
+const splitRegex = new RegExp(`^(.+?)(${alignedDelimiters.join('|')})(.+)$`);
+
 registerCommand(
   {
     addRowAfter,
@@ -261,6 +332,7 @@ registerCommand(
     addColumnBefore,
     removeRow,
     removeColumn,
+    createAlignedEnvironment,
   },
   { target: 'model', category: 'array-edit' }
 );

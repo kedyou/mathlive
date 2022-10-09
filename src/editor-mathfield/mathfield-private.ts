@@ -1505,6 +1505,7 @@ export class MathfieldPrivate implements GlobalContext, Mathfield {
     if (this.model.getValue() !== this.valueOnFocus)
       this.executeCommand('commit');
 
+    // comment this out if you want to inspect the virtual keyboard
     if (
       /onfocus|manual/.test(this.options.virtualKeyboardMode) &&
       !globalMathLive().sharedVirtualKeyboard

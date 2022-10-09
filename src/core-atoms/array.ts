@@ -620,8 +620,8 @@ export class ArrayAtom extends Atom {
     return result;
   }
 
-  getCell(row: number, col: number): Atom[] | undefined {
-    return this.array[row][col];
+  getCell(row: number, col: number): Atom[] | null | undefined {
+    return this.array[row]?.[col];
   }
 
   setCell(row: number, column: number, value: Atom[]): void {
