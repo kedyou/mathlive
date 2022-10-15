@@ -7,6 +7,7 @@ import { TextAtom } from '../core-atoms/text';
 import { LETTER_AND_DIGITS } from '../core-definitions/definitions';
 import type { Offset, Selection } from '../public/mathfield';
 import { getCommandSuggestionRange } from '../editor-mathfield/mode-editor-latex';
+import { alignedDelimiters } from './array';
 
 /*
  * Calculates the offset of the "next word".
@@ -313,8 +314,54 @@ export function move(
   }
 
   if (!model.collapseSelection(direction)) {
-    let pos = model.position + (direction === 'forward' ? +1 : -1);
+    let pos = model.position;
     let atom = model.at(pos);
+
+    //
+    // Kedyou: Customize cursor movement in aligned environment
+    //
+    if (
+      atom.parent instanceof ArrayAtom &&
+      atom.parent.colSeparationType === 'align'
+    ) {
+      const aligned = atom.parent;
+
+      if (direction === 'forward') {
+        // if you are in the first column
+        if (atom.treeBranch![1] === 0) {
+          const leftCell = aligned.array[atom.treeBranch![0]][0];
+          const rightCellFirstAtom = aligned.array[atom.treeBranch![0]][1]?.[1];
+          if (
+            leftCell[leftCell.length - 1] === atom && // if you are at the last atom of the first column
+            rightCellFirstAtom && // the right cell has a first atom
+            alignedDelimiters.includes(rightCellFirstAtom.command) // that atom is an aligned delimiter
+          ) {
+            // skip past the 'aligning delimiter' in the second column
+            pos++;
+          }
+        } else if (model.lastOffset === pos + 1) {
+          // prevent moving outside of aligned environment
+          model.announce('plonk');
+          return true;
+        }
+      } else if (direction === 'backward') {
+        if (pos === 1) {
+          // prevent moving outside of aligned environment
+          model.announce('plonk');
+          return true;
+        } else if (
+          atom.treeBranch![1] === 1 && // if you are in the second column
+          aligned.array[atom.treeBranch![0]][1][1] === atom && // if you are positioned at the first element
+          alignedDelimiters.includes(atom.command) // if the first element is an aligned delimiter
+        ) {
+          // skip past the 'aligning delimiter' in the second column and into the first column
+          pos--;
+        }
+      }
+    }
+
+    pos = pos + (direction === 'forward' ? +1 : -1);
+    atom = model.at(pos);
 
     //
     // 1. Handle `captureSelection` and `skipBoundary`

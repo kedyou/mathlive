@@ -258,8 +258,6 @@ export function createAlignedEnvironment(model: ModelPrivate): boolean {
   // do custom stuff with enter
   let atom = model.at(model.position);
 
-  console.log(model);
-
   while (
     atom &&
     atom.parent &&
@@ -314,6 +312,8 @@ export function createAlignedEnvironment(model: ModelPrivate): boolean {
 
 export const alignedDelimiters = [
   '=',
+  '>',
+  '<',
   '\\gt',
   '\\lt',
   '\\geq',
