@@ -16,6 +16,7 @@ import { ArrayAtom } from '../core-atoms/array';
 import { LeftRightAtom } from '../core-atoms/leftright';
 import { PlaceholderAtom } from '../core-atoms/placeholder';
 
+import { alignedDelimiters } from '../editor-model/array';
 import { range } from '../editor-model/selection-utils';
 import { ModelPrivate } from '../editor-model/model-private';
 import { applyStyleToUnstyledAtoms } from '../editor-model/styling';
@@ -385,7 +386,38 @@ export class MathModeEditor extends ModeEditor {
     const hadEmptyBody = parent!.hasEmptyBranch('body');
 
     const cursor = model.at(model.position);
-    cursor.parent!.addChildrenAfter(newAtoms, cursor);
+
+    // Kedyou: insert aligned delimiter into the second aligned column if typing in the first
+    let insertDefault = true;
+    if (
+      cursor.parent instanceof ArrayAtom &&
+      cursor.parent.colSeparationType === 'align' && // in aligned
+      cursor.treeBranch![1] === 0 // in the first column
+    ) {
+      // make sure the second column doesn't already have a delimiter
+      const secondColumn = cursor.parent.array[cursor.treeBranch![0]][1];
+      if (!secondColumn[1] || !alignedDelimiters.has(secondColumn[1].command)) {
+        // check if newAtoms is inserting an aligned delimiter
+        let i = 0;
+        for (; i < newAtoms.length; i++) {
+          if (alignedDelimiters.has(newAtoms[i].command)) break;
+        }
+        if (i < newAtoms.length) {
+          // insert the delimiter to the second column, move cursor
+          insertDefault = false;
+          if (i > 0) {
+            cursor.parent.addChildrenAfter(newAtoms.slice(0, i - 1), cursor);
+            cursor.parent.addChildrenAfter(newAtoms.slice(i), secondColumn[0]);
+          } else {
+            cursor.parent.addChildrenAfter(newAtoms, secondColumn[0]);
+          }
+        }
+      }
+    }
+
+    if (insertDefault) {
+      cursor.parent!.addChildrenAfter(newAtoms, cursor);
+    }
 
     if (format === 'latex' && typeof input === 'string') {
       // If we are given a latex string with no arguments, store it as

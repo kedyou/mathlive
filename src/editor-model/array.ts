@@ -288,14 +288,18 @@ export function createAlignedEnvironment(model: ModelPrivate): boolean {
         );
         if (belowCell) {
           const pos = model.offsetOf(belowCell[belowCell.length - 1]);
-          model.setSelection(pos, pos + 1);
+          model.setPositionHandlingPlaceholder(pos);
         }
       }
     }
   } else {
-    // todo: toggle an easy mode? need to make navigation and adding equals etc custom while in this mode
     // re-flow line into an ArrayAtom aligned environment
     let latex = model.mathfield.getValue();
+    if (latex.includes('\\begin{aligned}')) {
+      // put cursor inside the aligned environment
+      model.setPositionHandlingPlaceholder(model.lastOffset - 1);
+      return true;
+    }
     // split latex into left and right based on aligned delimiter
     if (splitRegex.test(latex)) {
       latex = latex.replace(splitRegex, '$1&$2$3');
@@ -310,7 +314,7 @@ export function createAlignedEnvironment(model: ModelPrivate): boolean {
   return true;
 }
 
-export const alignedDelimiters = [
+export const alignedDelimiters = new Set([
   '=',
   '>',
   '<',
@@ -320,9 +324,11 @@ export const alignedDelimiters = [
   '\\leq',
   '\\geqslant',
   '\\leqslant',
-];
+]);
 
-const splitRegex = new RegExp(`^(.+?)(${alignedDelimiters.join('|')})(.+)$`);
+const splitRegex = new RegExp(
+  `^(.+?)(${Array.from(alignedDelimiters).join('|')})(.+)$`
+);
 
 registerCommand(
   {
