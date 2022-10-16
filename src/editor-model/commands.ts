@@ -334,7 +334,7 @@ export function move(
           if (
             leftCell[leftCell.length - 1] === atom && // if you are at the last atom of the first column
             rightCellFirstAtom && // the right cell has a first atom
-            alignedDelimiters.includes(rightCellFirstAtom.command) // that atom is an aligned delimiter
+            alignedDelimiters.has(rightCellFirstAtom.command) // that atom is an aligned delimiter
           ) {
             // skip past the 'aligning delimiter' in the second column
             pos++;
@@ -352,7 +352,7 @@ export function move(
         } else if (
           atom.treeBranch![1] === 1 && // if you are in the second column
           aligned.array[atom.treeBranch![0]][1][1] === atom && // if you are positioned at the first element
-          alignedDelimiters.includes(atom.command) // if the first element is an aligned delimiter
+          alignedDelimiters.has(atom.command) // if the first element is an aligned delimiter
         ) {
           // skip past the 'aligning delimiter' in the second column and into the first column
           pos--;
