@@ -106,6 +106,15 @@ export class MathModeEditor extends ModeEditor {
                 cursor.parent.addRowAfter(currentRow);
                 currentRow++;
               }
+              // Kedyou: move to second column if pasted cell starts with an aligned delimiter
+              if (
+                currentColumn === 0 &&
+                cursor.parent.colSeparationType === 'align' &&
+                columns[i][1] &&
+                alignedDelimiters.has(columns[i][1].command)
+              ) {
+                currentColumn++;
+              }
               cursor.parent.setCell(currentRow, currentColumn, columns[i]);
             }
           } else {
