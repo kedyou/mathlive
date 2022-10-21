@@ -2,10 +2,12 @@ import { ContentChangeType } from '../public/options';
 import type { Range } from '../public/mathfield';
 
 import { LeftRightAtom } from '../core-atoms/leftright';
+import { ArrayAtom } from '../core-atoms/array';
 import { Atom, Branch } from '../core/atom';
 import { ModelPrivate } from './model-private';
 import { range } from './selection-utils';
 import { contentWillChange } from './listeners';
+import { alignedDelimiters } from './array';
 // Import {
 //     arrayFirstCellByRow,
 //     arrayColRow,
@@ -298,6 +300,28 @@ function onDelete(
     }
 
     return true;
+  }
+
+  // Kedyou: delete aligned delimiters
+  if (
+    atom.parent instanceof ArrayAtom &&
+    atom.parent.colSeparationType === 'align'
+  ) {
+    const aligned = atom.parent;
+    console.assert(atom.treeBranch !== undefined);
+    const row = Number(atom.treeBranch![0]);
+    const column = Number(atom.treeBranch![1]);
+    if (
+      column === 1 && // in second column
+      aligned.array[row][column]![1] === atom && // deleting the first atom
+      alignedDelimiters.has(atom.command)
+    ) {
+      atom.parent!.removeChild(atom);
+      // move cursor to first column
+      const leftCol = aligned.array[row][0]!;
+      model.position = model.offsetOf(leftCol[leftCol.length - 1]);
+      return true;
+    }
   }
 
   return false;
