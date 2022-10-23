@@ -302,7 +302,7 @@ function onDelete(
     return true;
   }
 
-  // Kedyou: delete aligned delimiters
+  // Kedyou: custom aligned environment backspace features
   if (
     atom.parent instanceof ArrayAtom &&
     atom.parent.colSeparationType === 'align'
@@ -311,6 +311,7 @@ function onDelete(
     console.assert(atom.treeBranch !== undefined);
     const row = Number(atom.treeBranch![0]);
     const column = Number(atom.treeBranch![1]);
+    // delete aligned delimiters and place cursor into first column
     if (
       column === 1 && // in second column
       aligned.array[row][column]![1] === atom && // deleting the first atom
@@ -320,6 +321,21 @@ function onDelete(
       // move cursor to first column
       const leftCol = aligned.array[row][0]!;
       model.position = model.offsetOf(leftCol[leftCol.length - 1]);
+      return true;
+    }
+    // delete row if row is entirely empty and backspace at the start
+    if (
+      row !== 0 &&
+      ((aligned.array[row][0]!.length < 2 &&
+        aligned.array[row][0]![1] === undefined) ||
+        aligned.array[row][0]![1].type === 'placeholder') &&
+      ((aligned.array[row][1]!.length < 2 &&
+        aligned.array[row][1]![1] === undefined) ||
+        aligned.array[row][1]![1].type === 'placeholder')
+    ) {
+      aligned.removeRow(row);
+      const above = aligned.array[row - 1][1]!;
+      model.position = model.offsetOf(above[above.length - 1]);
       return true;
     }
   }
