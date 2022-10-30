@@ -38,6 +38,8 @@ import { DEFAULT_FONT_SIZE } from './core/font-metrics';
 import { ComputeEngine, SemiBoxedExpression } from '@cortex-js/compute-engine';
 import { Expression, LatexSyntaxError } from './public/mathlive';
 
+export { DEFAULT_KEYBOARD_TOGGLE_GLYPH } from './editor/options';
+
 export type MathLiveGlobal = {
   version: string;
   sharedVirtualKeyboard?: RemoteVirtualKeyboard;
