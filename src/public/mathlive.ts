@@ -63,3 +63,5 @@ export declare const version: {
   mathlive: string;
   computeEngine: string;
 };
+
+export declare const DEFAULT_KEYBOARD_TOGGLE_GLYPH: string;

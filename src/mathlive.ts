@@ -43,6 +43,8 @@ import {
 import { Expression, LatexSyntaxError } from './public/mathlive';
 export * from '@cortex-js/compute-engine';
 
+export { DEFAULT_KEYBOARD_TOGGLE_GLYPH } from './editor/options';
+
 export type MathLiveGlobal = {
   version: string;
   sharedVirtualKeyboard?: RemoteVirtualKeyboard;
