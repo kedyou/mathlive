@@ -3,6 +3,7 @@ import MathfieldElement from '../public/mathfield-element';
 import { isBrowser } from '../common/capabilities';
 
 import { Atom, BranchName } from '../core/atom';
+import { ArrayAtom } from '../core-atoms/array';
 import { SubsupAtom } from '../core-atoms/subsup';
 import { register } from '../editor/commands';
 
@@ -13,7 +14,13 @@ export function moveAfterParent(model: ModelPrivate): boolean {
   const previousPosition = model.position;
   const parent = model.at(previousPosition).parent;
   // Do nothing if at the root.
-  if (!parent || parent.type === 'root') {
+  if (
+    !parent ||
+    parent.type === 'root' ||
+    (parent instanceof ArrayAtom &&
+      parent.colSeparationType == 'align' &&
+      parent.parent?.type === 'root')
+  ) {
     model.announce('plonk');
     return false;
   }
@@ -453,7 +460,13 @@ register(
     },
     moveBeforeParent: (model: ModelPrivate): boolean => {
       const { parent } = model.at(model.position);
-      if (!parent) {
+      if (
+        !parent ||
+        parent.type === 'root' ||
+        (parent instanceof ArrayAtom &&
+          parent.colSeparationType == 'align' &&
+          parent.parent?.type === 'root')
+      ) {
         model.announce('plonk');
         return false;
       }
