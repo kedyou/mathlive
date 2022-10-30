@@ -198,8 +198,7 @@ export function showVirtualKeyboard(
   const container = keyboard.options.virtualKeyboardContainer;
   if (!container) return false;
 
-  if (keyboard.element) keyboard.element.classList.add('is-visible');
-  else keyboard.buildAndAttachElement(theme);
+  if (!keyboard.element) keyboard.buildAndAttachElement(theme);
 
   if (!keyboard.visible) {
     const global = globalMathLive();
@@ -214,10 +213,9 @@ export function showVirtualKeyboard(
       : 'calc(var(--keyboard-height, 276px) - 1px)';
   }
 
-  // For the transition effect to work, the property has to be changed
-  // after the insertion in the DOM. Use setTimeout
+  keyboard.element?.classList.add('is-visible');
+
   setTimeout(() => {
-    keyboard.element?.classList.add('is-visible');
     keyboard.focusMathfield();
   }, 1);
 
