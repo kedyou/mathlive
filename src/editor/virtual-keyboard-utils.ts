@@ -1617,7 +1617,7 @@ function expandLayerMarkup(
             data-shifted-command='["performWithFeedback","extendToNextChar"]'>
             <svg class="svg-glyph"><use xlink:href='#svg-arrow-right' /></svg>
         </li>
-        <li class='action' data-command='["performWithFeedback","commit"]'>
+        <li class='action' data-command='["performWithFeedback","createAlignedEnvironment"]'>
         <svg class="svg-glyph"><use xlink:href='#svg-commit' /></svg></li>`
   );
 
