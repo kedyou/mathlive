@@ -3,6 +3,7 @@ import type { MathfieldPrivate } from './mathfield-private';
 import { requestUpdate } from './render';
 import { Offset } from '../public/mathfield';
 import { Atom } from '../core/atom-class';
+import { ArrayAtom } from '../core-atoms/array';
 import { acceptCommandSuggestion } from './autocomplete';
 import { selectGroup } from '../editor-model/commands-select';
 import { isBrowser } from '../common/capabilities';
@@ -175,6 +176,21 @@ export function onPointerDown(
       bias: 0,
     });
     if (anchor >= 0) {
+      // Kedyou: naïve way to prevent clicking going outside aligned environment
+      const atom = mathfield.model.at(anchor);
+      if (
+        anchor === 0 &&
+        atom.rightSibling instanceof ArrayAtom &&
+        atom.rightSibling.colSeparationType === 'align'
+      ) {
+        anchor++;
+      } else if (
+        anchor === mathfield.model.lastOffset &&
+        atom instanceof ArrayAtom &&
+        atom.colSeparationType === 'align'
+      ) {
+        anchor--;
+      }
       // Set a `tracking` class to avoid triggering the hover of the virtual
       // keyboard toggle, for example
       mathfield.element!.classList.add('tracking');
