@@ -318,7 +318,7 @@ export class MathfieldPrivate implements GlobalContext, Mathfield {
           'may a warning from Vue in the log above.',
 
         'color:red;font-family:system-ui;font-size:1.2rem;font-weight:bold',
-        'color:inherith;font-family:system-ui;font-size:inherit;font-weight:inherit'
+        'color:inherit;font-family:system-ui;font-size:inherit;font-weight:inherit'
       );
       return;
     }
@@ -640,11 +640,13 @@ export class MathfieldPrivate implements GlobalContext, Mathfield {
 
   get computeEngine(): ComputeEngine | null {
     if (this._computeEngine === undefined) {
-      this._computeEngine = new ComputeEngine();
-      if (this.options.decimalSeparator === ',')
+      const ComputeEngineCtor =
+        globalThis[Symbol.for('io.cortexjs.compute-engine')]?.ComputeEngine;
+      if (ComputeEngineCtor) this._computeEngine = new ComputeEngineCtor();
+      if (this._computeEngine && this.options.decimalSeparator === ',')
         this._computeEngine.latexOptions.decimalMarker = '{,}';
     }
-    return this._computeEngine;
+    return this._computeEngine ?? null;
   }
 
   get virtualKeyboardState(): 'hidden' | 'visible' {
@@ -1292,48 +1294,50 @@ export class MathfieldPrivate implements GlobalContext, Mathfield {
 
   attachNestedMathfield(): void {
     let needsUpdate = false;
-    this.placeholders.forEach((v) => {
-      const container = this.field?.querySelector(
-        `[data-placeholder-id=${v.atom.placeholderId}]`
+    const parentBounds = this.field.getBoundingClientRect();
+    this.placeholders.forEach((v, id) => {
+      const container = this.field.querySelector(
+        `[data-placeholder-id=${id}]`
       ) as HTMLElement;
-      if (container) {
-        const placeholderPosition = container.getBoundingClientRect();
-        const parentPosition = this.field?.getBoundingClientRect();
+      if (!container) return;
+      const placeholderBounds = container.getBoundingClientRect();
 
-        const scaleDownFontsize =
-          parseInt(window.getComputedStyle(container).fontSize) * 0.6;
+      // const scaleDownFontsize =
+      //   parseInt(window.getComputedStyle(container).fontSize) * 0.6;
 
-        if (
-          !v.field.style.fontSize ||
-          Math.abs(scaleDownFontsize - parseFloat(v.field.style.fontSize)) >=
-            0.2
-        ) {
-          needsUpdate = true;
-          v.field.style.fontSize = `${scaleDownFontsize}px`;
-        }
-        const newTop =
-          (placeholderPosition?.top ?? 0) -
-          (parentPosition?.top ?? 0) +
-          (this.element!.offsetTop ?? 0);
-        const newLeft =
-          (placeholderPosition?.left ?? 0) -
-          (parentPosition?.left ?? 0) +
-          (this.element!.offsetLeft ?? 0);
-        if (
-          !v.field.style.left ||
-          Math.abs(newLeft - parseFloat(v.field.style.left)) >= 1
-        ) {
-          needsUpdate = true;
-          v.field.style.left = `${newLeft}px`;
-        }
+      // if (
+      //   !v.field.style.fontSize ||
+      //   Math.abs(scaleDownFontsize - parseFloat(v.field.style.fontSize)) >=
+      //     0.2
+      // ) {
+      //   needsUpdate = true;
+      //   v.field.style.fontSize = `${scaleDownFontsize}px`;
+      // }
+      const depth = 0;
+      const newLeft =
+        placeholderBounds.left -
+        parentBounds.left +
+        (this.element!.offsetLeft ?? 0);
+      if (
+        !v.field.style.left ||
+        Math.abs(newLeft - parseFloat(v.field.style.left)) >= 1
+      ) {
+        needsUpdate = true;
+        v.field.style.left = `${newLeft}px`;
+      }
 
-        if (
-          !v.field.style.top ||
-          Math.abs(newTop - parseFloat(v.field.style.top)) >= 1
-        ) {
-          needsUpdate = true;
-          v.field.style.top = `${newTop}px`;
-        }
+      const newTop =
+        placeholderBounds.top -
+        parentBounds.top +
+        (this.element!.offsetTop ?? 0);
+      if (
+        !v.field.style.top ||
+        Math.abs(newTop - parseFloat(v.field.style.top)) >= 1 ||
+        depth !== 0
+      ) {
+        needsUpdate = true;
+        v.field.style.top =
+          depth === 0 ? `${newTop}px` : `calc(${newTop}px + ${depth}em)`;
       }
     });
 

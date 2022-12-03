@@ -1,16 +1,45 @@
 ## [Unreleased]
 
+### Breaking Changes
+
+- The Compute Engine has been split from MathLive to reduce the package size and
+  improve the TTI (Time To Interactive) metric. The Compute Engine now needs to
+  be loaded separately:
+
+```js
+import 'https://unpkg.com/@cortex-js/compute-engine@latest/dist/compute-engine.min.esm.js';
+```
+
+or
+
+```js
+import { ComputeEngine } from 'https://unpkg.com/@cortex-js/compute-engine@latest/dist/compute-engine.min.esm.js';
+```
+
+to create custom Compute Engine instances, which can then be associated with a
+mathfield using `mf.setOptions({computeEngine: ce})` or `mf.computeEngine = ce`.
+
+If the Compute Engine library is not loaded, some functionality of the mathfield
+will not be available: `mf.expression` will always return `null` and cannot be
+used to change the content of the mathfield, and `math-json` is not available as
+a format on the clipboard,
+
 ### Bug Fixes
 
-- The vertical placement of the superscript after a `\left...\right' command was
+- The vertical placement of the superscript after a `\left...\right` command was
   incorrect.
 - Extensible arrows with superscript or subscript would not serialize the
   superscript/subscript.
+- The fraction line and surd line would not be visible when printing with the
+  "Don't show image background" option in the print dialog.
+- The `"placeholder-change"` event was not dispatched.
 
 ### Improvements
 
 - Tweaked the layout of the symbols virtual keyboard to make regular arrows the
   default, rather than extensible arrows.
+- Fill-in-the-blank (placeholder) nested mathfields now line up with the
+  baseline. They also inherit the font-size of their parent container.
 
 ## 0.85.1 (2022-11-18)
 

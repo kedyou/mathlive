@@ -343,15 +343,13 @@ export class MathModeEditor extends ModeEditor {
       if (virtualKeyboardMode === 'manual') virtualKeyboardMode = 'onfocus';
       const element = new MathfieldElement({
         ...model.mathfield.options,
-        eventSink: null,
         virtualKeyboardMode,
         readOnly: false,
       } as Partial<MathfieldOptions>);
 
-      const value =
-        (placeholder.defaultValue?.length ?? 0) > 0
-          ? Atom.serialize(placeholder.defaultValue, { defaultMode: 'math' })
-          : '';
+      const value = placeholder.defaultValue
+        ? Atom.serialize(placeholder.defaultValue, { defaultMode: 'math' })
+        : '';
       element.value = value;
       element.addEventListener('input', () => {
         placeholderDidChange(model, placeholder.placeholderId!);

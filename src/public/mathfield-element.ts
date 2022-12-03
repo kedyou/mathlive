@@ -632,7 +632,7 @@ export class MathfieldElement extends HTMLElement implements Mathfield {
   /**
      * To create programmatically a new mathfield use:
      *
-     * ```javascript
+     ```javascript
     let mfe = new MathfieldElement();
 
     // Set initial value and options
@@ -648,7 +648,7 @@ export class MathfieldElement extends HTMLElement implements Mathfield {
 
     // Attach the element to the DOM
     document.body.appendChild(mfe);
-    * ```
+    ```
     */
   constructor(options?: Partial<MathfieldOptions>) {
     throwIfNotInBrowser();
@@ -811,7 +811,6 @@ export class MathfieldElement extends HTMLElement implements Mathfield {
       this._mathfield.placeholders.forEach((placeholder) => {
         placeholder.field.setOptions({
           ...options,
-          virtualKeyboardMode: 'onfocus',
           readOnly: false,
         });
       });
@@ -1151,10 +1150,10 @@ export class MathfieldElement extends HTMLElement implements Mathfield {
     this._mathfield = new MathfieldPrivate(
       this.shadowRoot!.querySelector(':host > div')!,
       {
-        eventSink: this,
         ...(gDeferredState.has(this)
           ? gDeferredState.get(this)!.options
           : getOptionsFromAttributes(this)),
+        eventSink: this,
         value,
       }
     );
@@ -1690,11 +1689,11 @@ declare global {
 }
 
 if (isBrowser() && !window.customElements?.get('math-field')) {
-  // The `globalThis[Symbol.for('mathlive')]` global is used  to coordinate between mathfield
+  // The `globalThis[Symbol.for('io.cortexjs.mathlive')]` global is used  to coordinate between mathfield
   // instances that may have been instantiated by different versions of the
   // library
-  globalThis[Symbol.for('mathlive')] ??= {};
-  const global = globalThis[Symbol.for('mathlive')];
+  globalThis[Symbol.for('io.cortexjs.mathlive')] ??= {};
+  const global = globalThis[Symbol.for('io.cortexjs.mathlive')];
   global.version = '{{SDK_VERSION}}';
 
   window.MathfieldElement = MathfieldElement;
