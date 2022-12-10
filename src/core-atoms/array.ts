@@ -663,11 +663,11 @@ export class ArrayAtom extends Atom {
     this.isDirty = true;
   }
 
-  addRowAfter(row: number): void {
+  addRowAfter(row: number, placeholders = true): void {
     console.assert(this.type === 'array' && Array.isArray(this.array));
     const newRow: Atom[][] = [];
-    for (let i = 0; i < this.colCount; i++)
-      newRow.push(makePlaceholderCell(this));
+    const makeCell = placeholders ? makePlaceholderCell : makeEmptyCell;
+    for (let i = 0; i < this.colCount; i++) newRow.push(makeCell(this));
 
     this.array.splice(row + 1, 0, newRow);
     for (let i = row + 1; i < this.rowCount; i++) {
@@ -766,6 +766,15 @@ export class ArrayAtom extends Atom {
 
     return result;
   }
+}
+
+/**
+ * Create a matrix cell with nothing in it.
+ */
+function makeEmptyCell(parent: ArrayAtom): Atom[] {
+  const first = new Atom('first', parent.context, { mode: parent.mode });
+  first.parent = parent;
+  return [first];
 }
 
 /**

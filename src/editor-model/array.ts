@@ -275,17 +275,25 @@ export function createAlignedEnvironment(model: ModelPrivate): boolean {
         atom.treeBranch[1] === 1 &&
         atom.treeBranch[0] === arrayAtom.rowCount - 1
       ) {
-        arrayAtom.addRowAfter(atom.treeBranch[0]);
+        arrayAtom.addRowAfter(atom.treeBranch[0], false);
         const pos = model.offsetOf(
           arrayAtom.getCell(atom.treeBranch[0] + 1, 0)![0]
         );
         model.setSelection(pos, pos + 1);
       } else {
-        // move cursor down one row
-        const belowCell = arrayAtom.getCell(
-          atom.treeBranch[0] + 1,
-          atom.treeBranch[1]
-        );
+        // move cursor down to next row
+        let belowCell = arrayAtom.getCell(atom.treeBranch[0] + 1, 0);
+        // use first column if it is empty
+        if (
+          !(
+            belowCell &&
+            belowCell.length < 2 &&
+            (!belowCell[1] || belowCell[1].type === 'placeholder')
+          )
+        ) {
+          // use to second column
+          belowCell = arrayAtom.getCell(atom.treeBranch[0] + 1, 1);
+        }
         if (belowCell) {
           const pos = model.offsetOf(belowCell[belowCell.length - 1]);
           model.setPositionHandlingPlaceholder(pos);
@@ -301,12 +309,22 @@ export function createAlignedEnvironment(model: ModelPrivate): boolean {
       return true;
     }
     // split latex into left and right based on aligned delimiter
-    if (splitRegex.test(latex)) {
-      latex = latex.replace(splitRegex, '$1&$2$3');
+    const matches = latex.match(splitRegex);
+    if (matches) {
+      if (matches[1].split('{').length === matches[1].split('}').length) {
+        latex = latex.replace(splitRegex, '$1&$2$3');
+      }
     }
-    const alignedLatex = `\\begin{aligned}${latex} \\\\ \\placeholder{} & \\placeholder{} \\end{aligned}`;
+    const alignedLatex = `\\begin{aligned}${latex} \\\\ & \\end{aligned}`;
     model.mathfield.setValue(alignedLatex);
-    // cursor is coincidentally placed in the correct place
+    // place cursor into appropriate row/column
+    if (matches && matches[3].length > 0) {
+      // place in new row first column
+      const arrayAtom = model.root.children[model.lastOffset] as ArrayAtom;
+      const pos = model.offsetOf(arrayAtom.getCell(1, 0)![0]);
+      model.setPositionHandlingPlaceholder(pos);
+    }
+    // else cursor gets coincidently placed into placeholder in the same line
   }
 
   // end custom stuff
