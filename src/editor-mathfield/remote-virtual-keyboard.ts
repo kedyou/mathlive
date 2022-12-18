@@ -195,36 +195,6 @@ export class RemoteVirtualKeyboard
     this.listeners = new Set();
 
     globalThis.addEventListener('message', this);
-
-    document.body.addEventListener('focusin', (event: FocusEvent) => {
-      const target = event.target as HTMLElement;
-      if (
-        target?.isConnected &&
-        target.tagName?.toLowerCase() === 'math-field'
-      ) {
-        const mf = target as MathfieldElement;
-        if (
-          mf.virtualKeyboardMode === 'onfocus' &&
-          mf.virtualKeyboardState === 'hidden'
-        )
-          mf.virtualKeyboardState = 'visible';
-      }
-    });
-
-    document.addEventListener('focusout', (event: FocusEvent) => {
-      const target = event.target as HTMLElement;
-      if (
-        target?.isConnected &&
-        target.tagName?.toLowerCase() === 'math-field'
-      ) {
-        setTimeout(() => {
-          if (document.activeElement?.tagName?.toLowerCase() !== 'math-field') {
-            const mf = document.querySelector('math-field') as MathfieldElement;
-            if (mf) mf.virtualKeyboardState = 'hidden';
-          }
-        }, 300);
-      }
-    });
   }
 
   static get defaultOptions(): RemoteVirtualKeyboardOptions {
