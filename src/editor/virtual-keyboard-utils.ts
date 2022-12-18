@@ -1357,7 +1357,9 @@ function makeKeyboardToolbar(
 
   const toolbarOptions = options.virtualKeyboardToolbar;
   const availableActions =
-    toolbarOptions === 'default' ? ['copyToClipboard', 'undo', 'redo'] : [];
+    toolbarOptions === 'default'
+      ? ['copyToClipboard', 'undo', 'redo', 'hideVirtualKeyboard']
+      : [];
 
   const actionsMarkup = {
     copyToClipboard: `
@@ -1379,6 +1381,14 @@ function makeKeyboardToolbar(
                 data-command='"redo"'
                 data-tooltip='${l10n('tooltip.redo')}'>
                 <svg><use xlink:href='#svg-redo' /></svg>
+            </div>
+        `,
+    hideVirtualKeyboard: `
+            <div class='action'
+                data-command='"hideVirtualKeyboard"'
+                data-tooltip='${l10n('tooltip.close')}'
+                style="font-size:200%;line-height:50%">
+                &times;
             </div>
         `,
   };
