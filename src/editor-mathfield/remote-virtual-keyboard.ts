@@ -184,7 +184,10 @@ export class RemoteVirtualKeyboard
   private sourceFrame: Window;
   private readonly canUndoState: boolean;
   private readonly canRedoState: boolean;
-  private readonly listeners: Set<EventListenerOrEventListenerObject | null>;
+  private readonly listeners: Map<
+    string,
+    Set<EventListenerOrEventListenerObject | null>
+  >;
 
   constructor(options?: Partial<RemoteVirtualKeyboardOptions>) {
     const validOptions = {
@@ -197,7 +200,7 @@ export class RemoteVirtualKeyboard
 
     super(validOptions);
 
-    this.listeners = new Set();
+    this.listeners = new Map();
 
     globalThis.addEventListener('message', this);
   }
@@ -233,26 +236,34 @@ export class RemoteVirtualKeyboard
     _options?: AddEventListenerOptions | boolean
   ): void {
     if (!ALLOWED_EVENTS.has(type)) throw new TypeError('Unexpected event type');
-    if (!this.listeners.has(callback)) this.listeners.add(callback);
+    if (this.listeners.has(type)) {
+      this.listeners.get(type)?.add(callback);
+    } else {
+      this.listeners.set(type, new Set([callback]));
+    }
   }
 
   dispatchEvent(event: Event): boolean {
     if (!ALLOWED_EVENTS.has(event.type))
       throw new TypeError('Unexpected event type');
-    if (this.listeners.size === 0) return false;
-    this.listeners.forEach((x) => {
+
+    const callbacks = this.listeners.get(event.type);
+    if (!callbacks || callbacks.size === 0) return false;
+    callbacks.forEach((x) => {
       if (typeof x === 'function') x(event);
       else x?.handleEvent(event);
     });
     return true;
   }
+
   removeEventListener(
     type: string,
     callback: EventListenerOrEventListenerObject | null,
     _options?: EventListenerOptions | boolean
   ): void {
     if (!ALLOWED_EVENTS.has(type)) throw new TypeError('Unexpected event type');
-    this.listeners.delete(callback);
+    const callbacks = this.listeners.get(type);
+    if (callbacks) callbacks.delete(callback);
   }
 
   handleEvent(event: MessageEvent<RemoteKeyboardMessageData>): void {
