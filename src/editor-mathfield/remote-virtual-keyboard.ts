@@ -16,6 +16,11 @@ import { globalMathLive } from '../mathlive';
 
 const POST_MESSAGE_TYPE = 'mathlive#remote-virtual-keyboard-message';
 
+const ALLOWED_EVENTS = new Set([
+  'virtual-keyboard-toggle',
+  'manual-close-keyboard',
+]);
+
 interface RemoteKeyboardMessageData {
   type: 'mathlive#remote-virtual-keyboard-message';
   action: 'executeCommand' | 'focus' | 'blur' | 'updateState' | 'setOptions';
@@ -227,13 +232,12 @@ export class RemoteVirtualKeyboard
     callback: EventListenerOrEventListenerObject | null,
     _options?: AddEventListenerOptions | boolean
   ): void {
-    if (type !== 'virtual-keyboard-toggle')
-      throw new TypeError('Unexpected event type');
+    if (!ALLOWED_EVENTS.has(type)) throw new TypeError('Unexpected event type');
     if (!this.listeners.has(callback)) this.listeners.add(callback);
   }
 
   dispatchEvent(event: Event): boolean {
-    if (event.type !== 'virtual-keyboard-toggle')
+    if (!ALLOWED_EVENTS.has(event.type))
       throw new TypeError('Unexpected event type');
     if (this.listeners.size === 0) return false;
     this.listeners.forEach((x) => {
@@ -247,8 +251,7 @@ export class RemoteVirtualKeyboard
     callback: EventListenerOrEventListenerObject | null,
     _options?: EventListenerOptions | boolean
   ): void {
-    if (type !== 'virtual-keyboard-toggle')
-      throw new TypeError('Unexpected event type');
+    if (!ALLOWED_EVENTS.has(type)) throw new TypeError('Unexpected event type');
     this.listeners.delete(callback);
   }
 
@@ -301,6 +304,19 @@ export class RemoteVirtualKeyboard
         height: this.element?.offsetHeight ?? 0,
       },
     });
+  }
+
+  /**
+   * Fire a specific event for when the close button is clicked on the virtual keyboard
+   */
+  manualClose(): void {
+    this.dispatchEvent(
+      new Event('manual-close-keyboard', {
+        bubbles: true,
+        cancelable: false,
+        composed: true,
+      })
+    );
   }
 
   public executeCommand(command: Selector | [Selector, ...any[]]): boolean {

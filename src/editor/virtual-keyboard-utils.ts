@@ -304,6 +304,19 @@ export class VirtualKeyboard implements VirtualKeyboardInterface {
     );
   }
 
+  /**
+   * Fire a specific event for when the close button is clicked on the virtual keyboard
+   */
+  manualClose(): void {
+    this._mathfield?.element?.dispatchEvent(
+      new Event('manual-close-keyboard', {
+        bubbles: true,
+        cancelable: false,
+        composed: true,
+      })
+    );
+  }
+
   executeCommand(
     command: SelectorPrivate | [SelectorPrivate, ...any[]]
   ): boolean {
@@ -1358,7 +1371,7 @@ function makeKeyboardToolbar(
   const toolbarOptions = options.virtualKeyboardToolbar;
   const availableActions =
     toolbarOptions === 'default'
-      ? ['copyToClipboard', 'undo', 'redo', 'hideVirtualKeyboard']
+      ? ['copyToClipboard', 'undo', 'redo', 'closeVirtualKeyboard']
       : [];
 
   const actionsMarkup = {
@@ -1383,9 +1396,9 @@ function makeKeyboardToolbar(
                 <svg><use xlink:href='#svg-redo' /></svg>
             </div>
         `,
-    hideVirtualKeyboard: `
+    closeVirtualKeyboard: `
             <div class='action'
-                data-command='"hideVirtualKeyboard"'
+                data-command='"closeVirtualKeyboard"'
                 data-tooltip='${l10n('tooltip.close')}'
                 style="font-size:200%;line-height:50%">
                 &times;

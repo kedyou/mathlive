@@ -252,6 +252,11 @@ export function hideVirtualKeyboard(keyboard: VirtualKeyboard): boolean {
   return false;
 }
 
+export function closeVirtualKeyboard(keyboard: VirtualKeyboard): boolean {
+  keyboard.manualClose();
+  return hideVirtualKeyboard(keyboard);
+}
+
 function toggleVirtualKeyboard(
   keyboard: VirtualKeyboard,
   theme?: VirtualKeyboardTheme
@@ -268,6 +273,8 @@ registerCommand(
       toggleVirtualKeyboard(keyboard, theme),
     hideVirtualKeyboard: (keyboard: VirtualKeyboard) =>
       hideVirtualKeyboard(keyboard),
+    closeVirtualKeyboard: (keyboard: VirtualKeyboard) =>
+      closeVirtualKeyboard(keyboard),
     showVirtualKeyboard: (keyboard: VirtualKeyboard, theme): boolean =>
       showVirtualKeyboard(keyboard, theme),
     onUndoStateChanged: (
