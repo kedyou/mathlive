@@ -270,35 +270,11 @@ export function createAlignedEnvironment(model: ModelPrivate): boolean {
     const arrayAtom = atom.parent;
     // ensure we are dealing with aligned environment
     if (arrayAtom.colSeparationType === 'align') {
-      // treeBranch[1] (column) is the second column in the aligned environment
-      if (
-        atom.treeBranch[1] === 1 &&
-        atom.treeBranch[0] === arrayAtom.rowCount - 1
-      ) {
-        arrayAtom.addRowAfter(atom.treeBranch[0], false);
-        const pos = model.offsetOf(
-          arrayAtom.getCell(atom.treeBranch[0] + 1, 0)![0]
-        );
-        model.setSelection(pos, pos + 1);
-      } else {
-        // move cursor down to next row
-        let belowCell = arrayAtom.getCell(atom.treeBranch[0] + 1, 0);
-        // use first column if it is empty
-        if (
-          !(
-            belowCell &&
-            belowCell.length < 2 &&
-            (!belowCell[1] || belowCell[1].type === 'placeholder')
-          )
-        ) {
-          // use to second column
-          belowCell = arrayAtom.getCell(atom.treeBranch[0] + 1, 1);
-        }
-        if (belowCell) {
-          const pos = model.offsetOf(belowCell[belowCell.length - 1]);
-          model.setPositionHandlingPlaceholder(pos);
-        }
-      }
+      arrayAtom.addRowAfter(atom.treeBranch[0], false);
+      const pos = model.offsetOf(
+        arrayAtom.getCell(atom.treeBranch[0] + 1, 0)![0]
+      );
+      model.setSelection(pos, pos + 1);
     }
   } else {
     // re-flow line into an ArrayAtom aligned environment
