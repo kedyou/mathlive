@@ -274,7 +274,7 @@ export function createAlignedEnvironment(model: ModelPrivate): boolean {
       const pos = model.offsetOf(
         arrayAtom.getCell(atom.treeBranch[0] + 1, 0)![0]
       );
-      model.setSelection(pos, pos + 1);
+      model.setPositionHandlingPlaceholder(pos);
     }
   } else {
     // re-flow line into an ArrayAtom aligned environment
