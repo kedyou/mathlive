@@ -951,19 +951,15 @@ const LAYERS = {
   'lower-roman': `
         <div class='rows'>
             <ul>
-                <row name='numpad-1' class='if-wide'/>
                 <row name='lower-1' shift-layer='upper-roman'/>
             </ul>
             <ul>
-                <row name='numpad-2' class='if-wide'/>
                 <row name='lower-2'  shift-layer='upper-roman''/>
             </ul>
             <ul>
-                <row name='numpad-3' class='if-wide'/>
                 <row name='lower-3'  shift-layer='upper-roman''/>
             </ul>
             <ul>
-                <row name='numpad-4' class='if-wide'/>
                 <li class='keycap' >;</li>
                 <li class='keycap' >,</li>
                 <li class='keycap w50' data-key=' ' data-alt-keys='space'>&nbsp;</li>
@@ -973,19 +969,15 @@ const LAYERS = {
   'upper-roman': `
         <div class='rows'>
             <ul>
-                <row name='numpad-1' class='if-wide'/>
                 <row name='upper-1'  shift-layer='lower-roman'/>
             </ul>
             <ul>
-                <row name='numpad-2' class='if-wide'/>
                 <row name='upper-2' shift-layer='lower-roman'/>
             </ul>
             <ul>
-                <row name='numpad-3' class='if-wide'/>
                 <row name='upper-3' shift-layer='lower-roman'/>
             </ul>
             <ul>
-                <row name='numpad-4' class='if-wide'/>
                 <li class='keycap' >;</li>
                 <li class='keycap' data-alt-keys='.'>;</li>
                 <li class='keycap w50' data-key=' '>&nbsp;</li>
@@ -995,7 +987,6 @@ const LAYERS = {
   'symbols': `
         <div class='rows'>
             <ul>
-                <row name='numpad-1' class='if-wide'/>
                 <li class='keycap tex' data-alt-keys='(' data-insert='\\lbrace '>{</li>
                 <li class='keycap tex' data-alt-keys=')' data-insert='\\rbrace '>}</li>
                 <li class='separator w5'></li>
@@ -1009,7 +1000,6 @@ const LAYERS = {
 
             </ul>
             <ul>
-                <row name='numpad-2' class='if-wide'/>
                 <li class='keycap tex' data-alt-keys='(' data-insert='\\lbrack '>[</li>
                 <li class='keycap tex' data-alt-keys=')' data-insert='\\rbrack '>]</li>
                 <li class='separator w5'></li>
@@ -1025,7 +1015,6 @@ const LAYERS = {
 
             </ul>
             <ul>
-                <row name='numpad-3' class='if-wide'/>
                 <li class='keycap tex' data-alt-keys='(' data-insert='\\langle '>&#x27e8;</li>
                 <li class='keycap tex' data-alt-keys=')' data-insert='\\rangle '>&#x27e9;</li>
                 <li class='separator w5'></li>
@@ -1045,7 +1034,6 @@ const LAYERS = {
                 ><svg class="svg-glyph"><use xlink:href="#svg-delete-backward" /></svg></li>
             </ul>
             <ul>
-                <row name='numpad-4' class='if-wide'/>
                 <li class='keycap tex' data-insert=','>,</li>
                 <li class='keycap tex' data-insert='\\cdot '>&#x22c5;<aside>centered dot</aside></li>
                 <li class='keycap tex' data-insert='\\colon '>:<aside>colon</aside></li>
