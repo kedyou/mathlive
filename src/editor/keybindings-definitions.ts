@@ -54,8 +54,8 @@ export const DEFAULT_KEYBINDINGS: Keybinding[] = [
   {
     key: '[Escape]',
     ifMode: 'latex',
-    command: ['complete', 'complete', { selectItem: 'true' }],
-  }, // Accept the entry (without the suggestion) and select
+    command: ['complete', 'reject'],
+  }, // Cancel LaTeX mode
 
   {
     key: '\\',
@@ -76,11 +76,6 @@ export const DEFAULT_KEYBINDINGS: Keybinding[] = [
   }, // Complete the suggestion
   { key: '[Return]', ifMode: 'latex', command: 'complete' },
   { key: '[Enter]', ifMode: 'latex', command: 'complete' },
-  {
-    key: 'shift+[Escape]',
-    ifMode: 'latex',
-    command: ['complete', 'reject'],
-  }, // Some keyboards can't generate
   // this combination, for example in 60% keyboards it is mapped to ~
   { key: '[ArrowDown]', ifMode: 'latex', command: 'nextSuggestion' },
   // { key: 'ios:command:[Tab]', ifMode: 'latex',command: 'nextSuggestion' },
