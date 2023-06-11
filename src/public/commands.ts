@@ -143,6 +143,10 @@ export interface Commands {
   /**
    * @category Array
    */
+  createAlignedEnvironment: (model: Model) => boolean;
+  /**
+   * @category Array
+   */
   addRowAfter: (model: Model) => boolean;
   /**
    * @category Array
