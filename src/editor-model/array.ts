@@ -9,6 +9,7 @@ import { ArrayAtom } from '../core-atoms/array';
 import type { Style } from '../public/core-types';
 import { Environment, TabularEnvironment } from '../public/core-types';
 import { makeEnvironment } from '../core-definitions/environments';
+import { isAlignEnvironment } from '../core-definitions/environment-types';
 import { PlaceholderAtom } from '../core-atoms/placeholder';
 import { LeftRightAtom } from '../core-atoms/leftright';
 export * from './array-utils';
@@ -114,7 +115,7 @@ export function arrayFirstCellByRow(array: Atom[][][]): string {
  *
  * Otherwise, consider creating an array based on the context (sibling atoms).
  *
- * If at root, create a `lines` environment.
+ * If at root, create a `align` environment.
  * If left sibling is `(` (or `\left( with matching \right))`) create a `pmatrix`
  * If left sibling is `[` create a `bmatrix`
  * If left sibling is { create a `cases`
@@ -126,11 +127,17 @@ export function arrayFirstCellByRow(array: Atom[][][]): string {
  */
 function parentArray(
   model: ModelPrivate,
-  where: 'after row' | 'before row' | 'after column' | 'before column'
+  where: 'after row' | 'before row' | 'after column' | 'before column',
+  aligned = false
 ): [ArrayAtom | undefined, [row: number, col: number]] {
   let atom: Atom | undefined = model.at(model.position);
 
-  while (atom && !(atom.parent instanceof ArrayAtom)) atom = atom.parent;
+  while (
+    atom &&
+    (!(atom.parent instanceof ArrayAtom) ||
+      (aligned && !isAlignEnvironment(atom.parent.environmentName)))
+  )
+    atom = atom.parent;
 
   //
   // Conversion:
@@ -157,24 +164,26 @@ function parentArray(
     // 1/ Handle insertion at the root (when the root is not already an array)
     //
     if (!atom.parent!.parent) {
-      let secondCell = model.extractAtoms([model.position, model.lastOffset]);
-      let firstCell = model.extractAtoms([0, model.position]);
+      // Kedyou: split cells into aligned environment
+      let firstCell = model.extractAtoms([0, model.lastOffset]);
+      let secondCell: Atom[] = [];
+      // search for aligned delimiters
+      for (let i = 0; i < firstCell.length; i++) {
+        if (alignedDelimiters.includes(firstCell[i].command)) {
+          secondCell = firstCell.slice(i);
+          firstCell = firstCell.slice(0, i);
+        }
+      }
       if (firstCell.length === 0) firstCell = placeholderCell();
       if (secondCell.length === 0) secondCell = placeholderCell();
-      let array: ArrayAtom;
-      if (where.endsWith('column')) {
-        array = makeEnvironment('split', [[firstCell, secondCell]]);
-        model.root = array;
-        if (isPlaceholderCell(array, 0, 0)) selectCell(model, array, 0, 0);
-        else if (isPlaceholderCell(array, 0, 1)) selectCell(model, array, 0, 1);
-        else model.position = model.offsetOf(cursor);
-      } else {
-        array = makeEnvironment('lines', [[firstCell], [secondCell]]);
-        model.root = array;
-        if (isPlaceholderCell(array, 0, 0)) selectCell(model, array, 0, 0);
-        else if (isPlaceholderCell(array, 1, 0)) selectCell(model, array, 1, 0);
-        else model.position = model.offsetOf(cursor);
-      }
+      const array = makeEnvironment('align', [
+        [firstCell, secondCell],
+        [placeholderCell(), placeholderCell()],
+      ]);
+      model.root.body = [array];
+      if (isPlaceholderCell(array, 0, 0)) selectCell(model, array, 0, 0);
+      else if (isPlaceholderCell(array, 1, 0)) selectCell(model, array, 1, 0);
+      else model.position = model.offsetOf(cursor);
 
       // We've created the environment and the cells, no need to add a row/column, so return undefined
       return [undefined, [0, 0]];
@@ -479,6 +488,47 @@ export function removeColumn(model: ModelPrivate): boolean {
   return true;
 }
 
+/**
+ * Kedyou: pressing enter creates aligned environment
+ */
+export function createAlignedEnvironment(model: ModelPrivate): boolean {
+  if (!contentWillChange(model, { inputType: 'insertLineBreak' })) return false;
+  // creates aligned environment if not already present
+  const [arrayAtom, [row, column]] = parentArray(model, 'after row', true);
+
+  // if the aligned environment already exists
+  if (arrayAtom) {
+    if (row === arrayAtom.rowCount - 1) {
+      // add row if cursor is at end of row at bottom of array
+      arrayAtom.addRowAfter(row);
+      const pos = model.offsetOf(arrayAtom.getCell(row + 1, 0)![0]);
+      model.setPositionHandlingPlaceholder(pos);
+    } else {
+      // move cursor down one row
+      const belowCell = arrayAtom.getCell(row + 1, column);
+      if (belowCell) {
+        const pos = model.offsetOf(belowCell[belowCell.length - 1]);
+        model.setPositionHandlingPlaceholder(pos);
+      }
+    }
+  }
+
+  contentDidChange(model, { inputType: 'insertLineBreak' });
+  return true;
+}
+
+export const alignedDelimiters = [
+  '=',
+  '<',
+  '>',
+  '\\gt',
+  '\\lt',
+  '\\geq',
+  '\\leq',
+  '\\geqslant',
+  '\\leqslant',
+];
+
 registerCommand(
   {
     addRowAfter,
@@ -488,6 +538,7 @@ registerCommand(
     removeRow,
     removeColumn,
     setEnvironment,
+    createAlignedEnvironment,
   },
   {
     target: 'model',
