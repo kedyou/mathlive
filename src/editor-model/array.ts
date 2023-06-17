@@ -454,19 +454,10 @@ export function createAlignedEnvironment(model: ModelPrivate): boolean {
 
   // if the aligned environment already exists
   if (arrayAtom) {
-    if (row === arrayAtom.rowCount - 1) {
-      // add row if cursor is at end of row at bottom of array
-      arrayAtom.addRowAfter(row);
-      const pos = model.offsetOf(arrayAtom.getCell(row + 1, 0)![0]);
-      model.setPositionHandlingPlaceholder(pos);
-    } else {
-      // move cursor down one row
-      const belowCell = arrayAtom.getCell(row + 1, column);
-      if (belowCell) {
-        const pos = model.offsetOf(belowCell[belowCell.length - 1]);
-        model.setPositionHandlingPlaceholder(pos);
-      }
-    }
+    // add row
+    arrayAtom.addRowAfter(row, false);
+    const pos = model.offsetOf(arrayAtom.getCell(row + 1, 0)![0]);
+    model.setPositionHandlingPlaceholder(pos);
   }
 
   contentDidChange(model, { inputType: 'insertLineBreak' });
