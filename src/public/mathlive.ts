@@ -43,6 +43,8 @@ export declare const version: {
   mathlive: string;
 };
 
+export declare const DEFAULT_KEYBOARD_TOGGLE_GLYPH: string;
+
 declare global {
   interface Window {
     mathVirtualKeyboard: VirtualKeyboardInterface & EventTarget;

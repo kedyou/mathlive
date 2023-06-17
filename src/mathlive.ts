@@ -17,6 +17,7 @@ import {
   serializeMathJsonToLatex,
 } from './public/mathlive-ssr';
 import type { VirtualKeyboardInterface } from './public/virtual-keyboard';
+export { DEFAULT_KEYBOARD_TOGGLE_GLYPH } from 'editor/mathfield';
 
 export type MathLiveGlobal = {
   version: string;
