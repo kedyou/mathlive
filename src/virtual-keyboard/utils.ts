@@ -756,7 +756,7 @@ const KEYCAP_SHORTCUTS: Record<string, Partial<VirtualKeyboardKeycap>> = {
   },
   '[action]': {
     class: 'action hide-shift',
-    command: ['performWithFeedback', 'commit'],
+    command: ['performWithFeedback', 'createAlignedEnvironment'],
     shift: {
       label: '<svg class=svg-glyph><use xlink:href=#circle-plus /></svg>',
       command: ['performWithFeedback', 'addRowAfter'],
