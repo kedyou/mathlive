@@ -32,8 +32,9 @@ import {
 } from './listeners';
 import { isOffset, isSelection, isRange, AnnounceVerb } from './utils';
 import { compareSelection, range } from './selection-utils';
-import type { ArrayAtom } from '../core-atoms/array';
+import { ArrayAtom } from '../core-atoms/array';
 import { LatexAtom } from '../core-atoms/latex';
+import { isAlignEnvironment } from '../core-definitions/environment-types';
 
 export type ModelState = {
   content: AtomJson;
@@ -283,6 +284,24 @@ export class ModelPrivate implements Model {
 
   get lastOffset(): Offset {
     return this.atoms.length - 1;
+  }
+
+  get lastOffsetOfAligned(): Offset {
+    let offset = this.lastOffset;
+    const atom = this.atoms[offset];
+    if (atom instanceof ArrayAtom && isAlignEnvironment(atom.environmentName)) {
+      offset--;
+    }
+    return offset;
+  }
+
+  get firstOffsetOfAligned(): Offset {
+    let offset = 0;
+    const atom = this.atoms[this.lastOffset];
+    if (atom instanceof ArrayAtom && isAlignEnvironment(atom.environmentName)) {
+      offset++;
+    }
+    return offset;
   }
 
   at(index: number): Atom {
@@ -712,8 +731,10 @@ export class ModelPrivate implements Model {
   }
 
   normalizeOffset(value: Offset): Offset {
-    if (value > 0) value = Math.min(value, this.lastOffset);
-    else if (value < 0) value = this.lastOffset + value + 1;
+    if (value > this.firstOffsetOfAligned)
+      value = Math.min(value, this.lastOffsetOfAligned);
+    else if (value < this.firstOffsetOfAligned)
+      value = this.firstOffsetOfAligned;
 
     return value;
   }

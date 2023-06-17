@@ -2,16 +2,24 @@ import { isBrowser } from '../common/capabilities';
 
 import { Atom, BranchName } from '../core/atom';
 import { SubsupAtom } from '../core-atoms/subsup';
+import { ArrayAtom } from '../core-atoms/array';
 import { register } from '../editor/commands';
 
 import { move, skip } from './commands';
 import type { ModelPrivate } from './model-private';
+import { isAlignEnvironment } from '../core-definitions/environment-types';
 
 export function moveAfterParent(model: ModelPrivate): boolean {
   const previousPosition = model.position;
   const parent = model.at(previousPosition).parent;
   // Do nothing if at the root.
-  if (!parent?.parent) {
+  if (
+    !parent ||
+    parent.type === 'root' ||
+    (parent instanceof ArrayAtom &&
+      isAlignEnvironment(parent.environmentName) &&
+      parent.parent?.type === 'root')
+  ) {
     model.announce('plonk');
     return false;
   }
@@ -470,7 +478,13 @@ register(
     },
     moveBeforeParent: (model: ModelPrivate): boolean => {
       const { parent } = model.at(model.position);
-      if (!parent) {
+      if (
+        !parent ||
+        parent.type === 'root' ||
+        (parent instanceof ArrayAtom &&
+          isAlignEnvironment(parent.environmentName) &&
+          parent.parent?.type === 'root')
+      ) {
         model.announce('plonk');
         return false;
       }
@@ -704,22 +718,26 @@ register(
       return false;
     },
     moveToMathfieldStart: (model: ModelPrivate): boolean => {
-      if (model.position === 0) {
+      let offset = model.firstOffsetOfAligned;
+
+      if (model.position === offset) {
         model.announce('plonk');
         return false;
       }
 
-      model.position = 0;
+      model.position = offset;
       model.mathfield.stopCoalescingUndo();
       return true;
     },
     moveToMathfieldEnd: (model: ModelPrivate): boolean => {
-      if (model.position === model.lastOffset) {
+      const offset = model.lastOffsetOfAligned;
+
+      if (model.position === offset) {
         model.announce('plonk');
         return false;
       }
 
-      model.position = model.lastOffset;
+      model.position = offset;
       model.mathfield.stopCoalescingUndo();
       return true;
     },
