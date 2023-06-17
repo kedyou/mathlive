@@ -169,7 +169,7 @@ function parentArray(
       let secondCell: Atom[] = [];
       // search for aligned delimiters
       for (let i = 0; i < firstCell.length; i++) {
-        if (alignedDelimiters.includes(firstCell[i].command)) {
+        if (alignedDelimiters.has(firstCell[i].command)) {
           secondCell = firstCell.slice(i);
           firstCell = firstCell.slice(0, i);
         }
@@ -517,7 +517,7 @@ export function createAlignedEnvironment(model: ModelPrivate): boolean {
   return true;
 }
 
-export const alignedDelimiters = [
+export const alignedDelimiters = new Set([
   '=',
   '<',
   '>',
@@ -527,7 +527,7 @@ export const alignedDelimiters = [
   '\\leq',
   '\\geqslant',
   '\\leqslant',
-];
+]);
 
 registerCommand(
   {
