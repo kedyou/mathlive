@@ -5,9 +5,6 @@ import MATHFIELD_STYLESHEET from '../../css/mathfield.less';
 import CORE_STYLESHEET from '../../css/core.less';
 
 // @ts-ignore-error
-import ENVIRONMENT_POPOVER_STYLESHEET from '../../css/environment-popover.less';
-
-// @ts-ignore-error
 import SUGGESTION_POPOVER_STYLESHEET from '../../css/suggestion-popover.less';
 
 // @ts-ignore-error
@@ -20,7 +17,6 @@ type StylesheetId =
   | 'core'
   | 'mathfield-element'
   | 'mathfield'
-  | 'environment-popover'
   | 'suggestion-popover'
   | 'keystroke-caption'
   | 'virtual-keyboard';
@@ -53,9 +49,6 @@ export function getStylesheetContent(id: StylesheetId): string {
       break;
     case 'mathfield':
       content = MATHFIELD_STYLESHEET;
-      break;
-    case 'environment-popover':
-      content = ENVIRONMENT_POPOVER_STYLESHEET;
       break;
     case 'suggestion-popover':
       content = SUGGESTION_POPOVER_STYLESHEET;
