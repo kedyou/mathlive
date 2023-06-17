@@ -2,11 +2,15 @@ import { ContentChangeType } from '../public/options';
 import type { Range } from '../public/mathfield';
 
 import { LeftRightAtom } from '../core-atoms/leftright';
+import { ArrayAtom } from '../core-atoms/array';
 import { Atom, Branch } from '../core/atom';
 import { ModelPrivate } from './model-private';
 import { range } from './selection-utils';
 import { contentWillChange } from './listeners';
 import MathfieldElement from 'public/mathfield-element';
+import { isAlignEnvironment } from 'core-definitions/environment-types';
+import { alignedDelimiters } from './array';
+
 // import {
 //     arrayFirstCellByRow,
 //     arrayColRow,
@@ -303,6 +307,29 @@ function onDelete(
     }
 
     return true;
+  }
+
+  // Kedyou: delete aligned delimiters
+  if (
+    parent instanceof ArrayAtom &&
+    isAlignEnvironment(parent.environmentName)
+  ) {
+    console.assert(atom.parentBranch !== undefined);
+    const row = Number(atom.parentBranch![0]);
+    const column = Number(atom.parentBranch![1]);
+    const cell = parent.array[row][column];
+    if (
+      column === 1 && // in second column
+      direction === 'backward' &&
+      cell?.[1] === atom && // deleting the first atom
+      alignedDelimiters.has(atom.command)
+    ) {
+      atom.parent!.removeChild(atom);
+      // move cursor to first column
+      const leftCol = parent.array[row][0]!;
+      model.position = model.offsetOf(leftCol[leftCol.length - 1]);
+      return true;
+    }
   }
 
   if (parent?.type === 'genfrac' && !branch && atom.type !== 'first') {
