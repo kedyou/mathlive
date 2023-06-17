@@ -1,5 +1,5 @@
 {
-  "name": "mathlive",
+  "name": "@kedyou/mathlive",
   "version": "0.95.0",
   "description": "A web component for math input",
   "license": "MIT",
@@ -46,9 +46,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/arnog/mathlive.git"
+    "url": "git+https://github.com/kedyou/mathlive.git"
   },
-  "bugs": "https://github.com/arnog/mathlive/issues/",
+  "bugs": {
+    "url": "https://github.com/arnog/mathlive/issues/"
+  },
   "scripts": {
     "build": "bash ./scripts/build.sh",
     "clean": "bash ./scripts/clean.sh",
@@ -166,5 +168,6 @@
     "mathjax",
     "katex",
     "mathquill"
-  ]
+  ],
+  "homepage": "https://github.com/kedyou/mathlive#readme"
 }
