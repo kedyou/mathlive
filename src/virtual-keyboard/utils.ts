@@ -714,7 +714,7 @@ const KEYCAP_SHORTCUTS: Record<string, Partial<VirtualKeyboardKeycap>> = {
   },
   '[action]': {
     class: 'action',
-    command: ['performWithFeedback', 'commit'],
+    command: ['performWithFeedback', 'createAlignedEnvironment'],
     width: 1.5,
     label: '<svg class=svg-glyph><use xlink:href=#svg-commit /></svg>',
   },
@@ -1162,6 +1162,7 @@ function handleVirtualKeyboardEvent(controller) {
 export function executeKeycapCommand(
   keycap: Partial<VirtualKeyboardKeycap>
 ): void {
+  console.log(keycap);
   let command: SelectorPrivate | [SelectorPrivate, ...any[]] | undefined =
     keycap.command as SelectorPrivate | [SelectorPrivate, ...any[]] | undefined;
   if (!command && keycap.insert) {
