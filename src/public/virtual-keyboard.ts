@@ -248,6 +248,7 @@ export interface MathfieldProxy {
 export interface VirtualKeyboardInterface extends VirtualKeyboardOptions {
   show(options?: { animate: boolean }): void;
   hide(options?: { animate: boolean }): void;
+  manualClose(options?: { animate: boolean }): void;
   visible: boolean;
   readonly isShifted: boolean;
   readonly boundingRect: DOMRect;
@@ -286,6 +287,7 @@ export type VirtualKeyboardMessageAction =
   | 'execute-command' // From proxy to VK
   | 'show' // From proxy to VK
   | 'hide' // From proxy to VK
+  | 'manual-close' // From proxy to VK
   | 'update-setting' // From proxy to VK
   | 'update-toolbar' // From proxy to VK
   | 'synchronize-proxy' // From VK to proxy
