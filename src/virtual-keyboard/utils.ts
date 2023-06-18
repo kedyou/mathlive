@@ -321,7 +321,7 @@ export function makeEditToolbar(
   if (mathfield.selectionIsCollapsed) availableActions.push('undo', 'redo');
   else availableActions.push('cutToClipboard', 'copyToClipboard');
 
-  availableActions.push('pasteFromClipboard', 'hideVirtualKeyboard');
+  availableActions.push('pasteFromClipboard', 'closeVirtualKeyboard');
 
   const actionsMarkup = {
     undo: `<div class='action ${mathfield.canUndo === false ? 'disabled' : ''}'
@@ -355,9 +355,9 @@ export function makeEditToolbar(
             <svg><use xlink:href='#svg-paste' /></svg>
         </div>
     `,
-    hideVirtualKeyboard: `
+    closeVirtualKeyboard: `
 				<div class='action'
-						data-command='"hideVirtualKeyboard"'
+						data-command='"closeVirtualKeyboard"'
 						data-tooltip='${l10n('tooltip.close')}'
 						style="font-size:200%;line-height:0"
 				>&times;</div>
