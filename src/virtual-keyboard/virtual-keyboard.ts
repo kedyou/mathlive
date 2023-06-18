@@ -311,40 +311,6 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
     this.listeners = {};
 
     window.top?.addEventListener('message', this);
-
-    document.body.addEventListener('focusin', (event: FocusEvent) => {
-      const target = event.target as HTMLElement;
-      if (
-        target?.isConnected &&
-        target.tagName?.toLowerCase() === 'math-field' &&
-        isTouchCapable()
-      ) {
-        const mf = target as MathfieldElement;
-        if (mf.mathVirtualKeyboardPolicy === 'auto' && !mf.readOnly)
-          this.show({ animate: true });
-      }
-    });
-
-    document.addEventListener('focusout', (evt) => {
-      const target = evt.target as MathfieldElement;
-      if (target.mathVirtualKeyboardPolicy !== 'manual') {
-        // If after a short delay the active element is no longer
-        // a mathfield (or there is no active element),
-        // hide the virtual keyboard
-        setTimeout(() => {
-          let target = document.activeElement;
-          let focusedMathfield = false;
-          while (target) {
-            if (target.tagName?.toLowerCase() === 'math-field') {
-              focusedMathfield = true;
-              break;
-            }
-            target = target.shadowRoot?.activeElement ?? null;
-          }
-          if (!focusedMathfield) this.hide();
-        }, 300);
-      }
-    });
   }
 
   addEventListener(
