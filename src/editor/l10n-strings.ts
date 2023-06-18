@@ -10,6 +10,7 @@ export const STRINGS = {
     'tooltip.cut to clipboard': 'Cut to Clipboard',
     'tooltip.paste from clipboard': 'Paste from Clipboard',
     'tooltip.redo': 'Redo',
+    'tooltip.close': 'Close',
     'tooltip.toggle virtual keyboard': 'Toggle Virtual Keyboard',
     'tooltip.undo': 'Undo',
     'menu.insert matrix': 'Insert Matrix',
