@@ -27,10 +27,6 @@
           "require": "./dist/mathlive.js"
         }
       },
-      "node": {
-        "types": "./dist/types/mathlive-ssr.d.ts",
-        "import": "./dist/mathlive-ssr.min.mjs"
-      },
       "default": {
         "types": "./dist/types/mathlive.d.ts",
         "import": "./dist/mathlive.min.mjs",

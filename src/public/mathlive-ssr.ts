@@ -19,7 +19,7 @@ import { Box, coalesce, makeStruts } from '../core/box';
 import { Context } from '../core/context';
 import { parseLatex } from '../core/parser';
 import { atomToSpeakableText } from '../editor/atom-to-speakable-text';
-import { Expression } from './mathfield-element';
+import type { Expression } from './mathfield-element';
 import { validateLatex as validateLatexInternal } from '../core/parser';
 
 import { atomToAsciiMath } from '../editor/atom-to-ascii-math';
