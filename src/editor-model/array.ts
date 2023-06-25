@@ -88,16 +88,14 @@ function parentArray(
           firstCell = firstCell.slice(0, i);
         }
       }
-      if (firstCell.length === 0) firstCell = placeholderCell();
-      if (secondCell.length === 0) secondCell = placeholderCell();
+      if (firstCell.length === 0) firstCell = emptyCell();
+      if (secondCell.length === 0) secondCell = emptyCell();
       const array = makeEnvironment('align', [
         [firstCell, secondCell],
-        [placeholderCell(), placeholderCell()],
+        [emptyCell(), emptyCell()],
       ]);
       model.root.body = [array];
-      if (isPlaceholderCell(array, 0, 0)) selectCell(model, array, 0, 0);
-      else if (isPlaceholderCell(array, 1, 0)) selectCell(model, array, 1, 0);
-      else model.position = model.offsetOf(cursor);
+      selectCell(model, array, 1, 0);
 
       // We've created the environment and the cells, no need to add a row/column, so return undefined
       return [undefined, [0, 0]];
