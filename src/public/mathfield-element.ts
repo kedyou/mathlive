@@ -1133,13 +1133,13 @@ export class MathfieldElement extends HTMLElement implements Mathfield {
         getStylesheet('mathfield'),
         getStylesheet('mathfield-element'),
       ];
-      this.shadowRoot!.innerHTML = `<span style="pointer-events:auto"></span><slot style="display:none"></slot>`;
+      this.shadowRoot!.innerHTML = `<span style="pointer-events:var(--pointer-events, auto)"></span><slot style="display:none"></slot>`;
     } else {
       this.shadowRoot!.innerHTML = `<style>${getStylesheetContent(
         'core'
       )}${getStylesheetContent('mathfield')}${getStylesheetContent(
         'mathfield-element'
-      )}</style><span style="pointer-events:auto"></span><slot style="display:none"></slot>`;
+      )}</style><span style="pointer-events:var(--pointer-events, auto)"></span><slot style="display:none"></slot>`;
     }
 
     // Record the (optional) configuration options, as a deferred state
@@ -1656,7 +1656,7 @@ import 'https://unpkg.com/@cortex-js/compute-engine?module';
 
     // Ignore blur events if the scrim is open (case where the variant panel
     // is open). Otherwise we disconect from the VK and end up in a weird state.
-    if (evt.type === 'blur' && Scrim.scrim.state === 'closed')
+    if (evt.type === 'blur' && Scrim?.scrim?.state === 'closed')
       this._mathfield?.blur();
   }
 
