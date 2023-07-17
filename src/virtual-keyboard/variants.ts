@@ -393,7 +393,7 @@ export function showVariantsPanel(
 export function hideVariantsPanel(): void {
   variantPanelController?.abort();
   variantPanelController = null;
-  Scrim.scrim?.close();
+  Scrim?.scrim?.close();
 }
 
 function makeVariants(
