@@ -1,6 +1,6 @@
 {
   "name": "@kedyou/mathlive",
-  "version": "0.95.0",
+  "version": "0.95.0-kedyou.1",
   "description": "A web component for math input",
   "license": "MIT",
   "funding": {
