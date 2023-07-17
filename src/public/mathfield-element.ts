@@ -1295,7 +1295,7 @@ export class MathfieldElement extends HTMLElement implements Mathfield {
         getStylesheetContent('ui') +
         getStylesheetContent('menu') +
         '</style>' +
-        '<span></span><slot style="display:none"></slot>';
+        '<span style="pointer-events:var(--pointer-events, auto)"></span><slot style="display:none"></slot>';
     }
 
     // Record the (optional) configuration options, as a deferred state
