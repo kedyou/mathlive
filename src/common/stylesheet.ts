@@ -32,7 +32,7 @@ export function getStylesheetContent(id: StylesheetId): string {
     //
     case 'mathfield-element':
       content = `
-    :host { display: inline-block; color: fieldtext; padding:4px; pointer-events: none; }
+    :host { display: inline-block; color: fieldtext; }
     :host([hidden]) { display: none; }
     :host([disabled]), :host([disabled]:focus), :host([disabled]:focus-within) { outline: none; opacity:  .5; }
     :host(:focus), :host(:focus-within) {
@@ -42,6 +42,9 @@ export function getStylesheetContent(id: StylesheetId): string {
     :host([readonly]:focus), :host([readonly]:focus-within),
     :host([read-only]:focus), :host([read-only]:focus-within) {
       outline: none;
+    }
+    @media (hover: none) and (pointer: coarse) {
+      :host(:not(:focus)) :first-child { pointer-events: none !important; }
     }`;
       break;
     case 'core':

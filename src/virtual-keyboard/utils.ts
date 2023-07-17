@@ -639,7 +639,8 @@ export function renderKeycap(
     else if (typeof keycap.shift === 'object') {
       markup = keycap.shift.label
         ? keycap.shift.label
-        : (latexToMarkup(keycap.shift.latex || keycap.shift.insert || '') ||
+        : // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+          (latexToMarkup(keycap.shift.latex || keycap.shift.insert || '') ||
             keycap.shift.key) ??
           '';
     }
@@ -651,7 +652,8 @@ export function renderKeycap(
     //
     markup = keycap.label
       ? keycap.label
-      : (latexToMarkup(keycap.latex || keycap.insert || '') || keycap.key) ??
+      : // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+        (latexToMarkup(keycap.latex || keycap.insert || '') || keycap.key) ??
         '';
 
     if (keycap.shift) {
@@ -662,6 +664,7 @@ export function renderKeycap(
       else if (keycap.shift.label) shiftLabel = keycap.shift.label;
       else {
         shiftLabel =
+          // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
           (latexToMarkup(keycap.shift.latex || keycap.shift.insert || '') ||
             keycap.shift.key) ??
           '';
@@ -1082,7 +1085,7 @@ function handlePointerDown(ev: PointerEvent) {
           target?.classList.remove('is-active');
         });
       }
-    }, 200);
+    }, 300);
   }
 
   ev.preventDefault();
