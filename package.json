@@ -1,6 +1,5 @@
 {
   "name": "@kedyou/mathlive",
-  "version": "0.95.0-kedyou.1",
   "description": "A web component for math input",
   "license": "MIT",
   "funding": {
@@ -55,9 +54,7 @@
     "lint": "eslint --fix src/; prettier -w src/",
     "prepare": "bash ./scripts/build.sh production",
     "start": "bash ./scripts/start.sh",
-    "test": "bash ./scripts/test.sh",
-    "version": "bash ./scripts/version.sh",
-    "postversion": "bash ./scripts/github-release.sh"
+    "test": "bash ./scripts/test.sh"
   },
   "author": "Arno Gourdol <arno@arno.org>",
   "contributors": [
