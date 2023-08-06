@@ -2,7 +2,7 @@
     <img alt="math live" src="assets/mathlive-1.png?raw=true">
 </div>
 
-<h3>The <strong>MathLive</strong> mathfield</h3>
+<h3><strong>Kedyou's fork of MathLive</strong></h3>
 <h1>A Web Component for Math Input</h1>
 
 [![Maintenance](https://img.shields.io/maintenance/yes/2025.svg)]()
@@ -133,7 +133,7 @@ environments.
 
 Update with the latest changes from arnog:
 
-```
+```sh
 # Add the remote, call it "upstream":
 git remote add upstream https://github.com/arnog/mathlive/
 # Fetch all the branches of that remote into remote-tracking branches
@@ -146,4 +146,17 @@ git checkout master
 git rebase upstream/master
 # After finishing rebase/merging changes, force push
 git push --force
+```
+
+### npm link
+
+To test the MathLive in Kedyou before publishing, use `npm link`:
+
+```sh
+# In mathlive repo
+npm link
+# In the kedyou-frontend repo
+npm link @kedyou/mathlive
+# And then when you're finished
+npm unlink @kedyou/mathlive
 ```
