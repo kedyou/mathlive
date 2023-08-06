@@ -2,7 +2,7 @@
     <img alt="math live" src="assets/mathlive-1.png?raw=true">
 </div>
 
-<h3><strong>MathLive</strong></h3>
+<h3><strong>Kedyou's fork of MathLive</strong></h3>
 <h1>A Web Component for Math Input</h1>
 
 [![Maintenance](https://img.shields.io/maintenance/yes/2023.svg)]()
@@ -22,20 +22,20 @@ part? It's easy to customize to your needs!
 <table align="center" >
     <tr>
         <td width='50%' align='center' style="border:none;">
-            <img alt="The popover panel" 
-            style='margin:15px; box-shadow: 0px 5px 15px #000; border: 1px solid #eee' 
+            <img alt="The popover panel"
+            style='margin:15px; box-shadow: 0px 5px 15px #000; border: 1px solid #eee'
             src="assets/screenshots/popover.png">
         </td>
         <td width='50%' align='center' style="border:none;">
-            <img alt="A Virtual Keyboard" 
-            style='margin:15px; box-shadow: 0px 5px 15px #000; border: 1px solid #eee' 
+            <img alt="A Virtual Keyboard"
+            style='margin:15px; box-shadow: 0px 5px 15px #000; border: 1px solid #eee'
             src="assets/screenshots/virtualKeyboard.png">
         </td>
     </tr>
     <tr style="background-color: initial; border: none;">
         <td colspan="2" align="center" style="border:none;">
-            <img width="50%" alt="The Loop Equation" 
-            style='margin:15px; box-shadow: 0px 5px 15px #000; border: 1px solid #eee' 
+            <img width="50%" alt="The Loop Equation"
+            style='margin:15px; box-shadow: 0px 5px 15px #000; border: 1px solid #eee'
             src="assets/screenshots/loop-eqn.png">
         </td>
     </tr>
@@ -73,11 +73,11 @@ MathLive API on the [MathLive SDK page](https://cortexjs.io/docs/mathlive).
 
 <dl>
   <dt><a href="https://cortexjs.io/math-json">MathJSON</a> (on <a href="https://github.com/cortex-js/math-json">GitHub</a>)</dt>
-  <dd>A lightweight data interchange format for mathematical notation.</dd>  
+  <dd>A lightweight data interchange format for mathematical notation.</dd>
   <dt><a href="https://cortexjs.io/compute-engine">Compute Engine</a> (on <a href="https://github.com/cortex-js/math-json/tree/master/src/compute-engine">GitHub</a>)</dt>
-  <dd>The CortexJS Compute Engine performs calculations on MathJSON expressions</dd>  
+  <dd>The CortexJS Compute Engine performs calculations on MathJSON expressions</dd>
   <dt><a href="https://cortexjs.io/cortex">Cortex</a> (on <a href="https://github.com/cortex-js/math-json/tree/master/src/cortex">GitHub</a>)</dt>
-  <dd>Cortex is a programming language for scientific computing</dd>  
+  <dd>Cortex is a programming language for scientific computing</dd>
 </dl>
 
 ## Contact Us
@@ -97,7 +97,7 @@ environments.
 
 Update with the latest changes from arnog:
 
-```
+```sh
 # Add the remote, call it "upstream":
 git remote add upstream https://github.com/arnog/mathlive/
 # Fetch all the branches of that remote into remote-tracking branches
@@ -110,4 +110,17 @@ git checkout master
 git rebase upstream/master
 # After finishing rebase/merging changes, force push
 git push --force
+```
+
+### npm link
+
+To test the MathLive in Kedyou before publishing, use `npm link`:
+
+```sh
+# In mathlive repo
+npm link
+# In the kedyou-frontend repo
+npm link @kedyou/mathlive
+# And then when you're finished
+npm unlink @kedyou/mathlive
 ```
