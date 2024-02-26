@@ -134,15 +134,19 @@ git rebase upstream/master
 git push --force
 ```
 
-### npm link
+### Local testing
 
-To test the MathLive in Kedyou before publishing, use `npm link`:
+To test the MathLive in Kedyou before publishing, use `pnpm link --global`:
 
 ```sh
 # In mathlive repo
-npm link
+pnpm link --global
 # In the kedyou-frontend repo
-npm link @kedyou/mathlive
-# And then when you're finished
-npm unlink @kedyou/mathlive
+pnpm link --global @kedyou/mathlive
+```
+
+#### **`sites/frontend/package.json`**
+```diff
+-"@kedyou/mathlive": "^0.98.6"
++"@kedyou/mathlive": "link:^0.98.6"
 ```
