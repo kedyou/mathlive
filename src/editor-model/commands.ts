@@ -11,6 +11,7 @@ import { PromptAtom } from '../atoms/prompt';
 import { getLocalDOMRect } from 'editor-mathfield/utils';
 import { _Mathfield } from 'editor-mathfield/mathfield-private';
 import { alignedDelimiters } from './array';
+import { deleteRange } from './delete';
 
 /*
  * Calculates the offset of the "next word".
@@ -118,12 +119,13 @@ export function wordBoundaryOffset(
  * than the current focus.
  * If `extend` is true, the selection will be extended. Otherwise, it is
  * collapsed, then moved.
+ * If `delete` is true, the skipped range is removed.
  * @todo array
  */
 export function skip(
   model: _Model,
   direction: 'forward' | 'backward',
-  options?: { extend: boolean }
+  options?: { extend?: boolean; delete?: boolean }
 ): boolean {
   const previousPosition = model.position;
 
@@ -276,13 +278,24 @@ export function skip(
       model.announce('plonk');
       return false;
     }
+    model.announce('move', previousPosition);
   } else {
     if (offset === model.position) {
       model.announce('plonk');
       return false;
     }
 
-    model.position = offset;
+    if (options?.delete ?? false) {
+      if (direction === 'forward')
+        deleteRange(model, [previousPosition, offset], 'deleteWordForward');
+      else {
+        deleteRange(model, [previousPosition, offset], 'deleteWordBackward');
+        model.position = offset;
+      }
+    } else {
+      model.position = offset;
+      model.announce('move', previousPosition);
+    }
   }
 
   model.announce('move', previousPosition);
@@ -336,7 +349,7 @@ export function move(
     //
     // Kedyou: Customize cursor movement in aligned environment
     //
-    let atom = model.at(pos);
+    const atom = model.at(pos);
 
     if (
       atom.parent instanceof ArrayAtom &&
