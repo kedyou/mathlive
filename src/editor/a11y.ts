@@ -81,8 +81,6 @@ function relationName(atom: Atom): string {
   } else if (atom.parentBranch === 'superscript') result = 'superscript';
   else if (atom.parentBranch === 'subscript') result = 'subscript';
 
-  if (!result) console.log('unknown relationship');
-
   return result ?? 'parent';
 }
 
@@ -146,7 +144,6 @@ export function defaultAnnounceHook(
     )
       ? ' \u202F '
       : ' \u00A0 ';
-    console.log('liveText', liveText);
     mathfield.ariaLiveText.textContent = liveText + ariaLiveChangeHack;
   }
 }
