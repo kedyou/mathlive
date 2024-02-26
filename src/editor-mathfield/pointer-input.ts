@@ -5,6 +5,8 @@ import { Atom } from '../core/atom-class';
 import { acceptCommandSuggestion } from './autocomplete';
 import { selectGroup } from '../editor-model/commands-select';
 import type { Offset } from 'public/mathfield';
+import { isAlignEnvironment } from 'latex-commands/environment-types';
+import { ArrayAtom } from 'atoms/array';
 
 let gLastTap: { x: number; y: number; time: number } | null = null;
 let gTapCount = 0;
@@ -367,9 +369,7 @@ export function offsetFromPoint(
     }
   }
 
-  let result = mathfield.model.offsetOf(atom);
-
-  if (result < 0) return -1;
+  if (mathfield.model.offsetOf(atom) < 0) return -1;
 
   //
   // 4/ Account for the desired bias
@@ -381,10 +381,23 @@ export function offsetFromPoint(
       // preceding atom)
       const bounds = getAtomBounds(mathfield, atom);
       if (bounds && x < (bounds.left + bounds.right) / 2)
-        result = mathfield.model.offsetOf(atom.leftSibling);
-    } else if (options.bias < 0)
-      result = mathfield.model.offsetOf(atom.leftSibling);
+        atom = atom.leftSibling;
+    } else if (options.bias < 0) atom = atom.leftSibling;
   }
 
-  return result;
+  //
+  // Kedyou: don't click into the first atom
+  // of the second column of an aligned environment
+  //
+  if (
+    atom.type === 'first' &&
+    atom.parent instanceof ArrayAtom &&
+    isAlignEnvironment(atom.parent.environmentName) &&
+    atom.col === 1
+  ) {
+    const firstColumn = atom.parent.array[atom.row][0]!;
+    atom = firstColumn[firstColumn.length - 1];
+  }
+
+  return mathfield.model.offsetOf(atom) || -1;
 }
