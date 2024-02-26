@@ -488,8 +488,8 @@ export function removeColumn(model: _Model): boolean {
 /**
  * Kedyou: pressing enter creates aligned environment
  */
-export function createAlignedEnvironment(model: ModelPrivate): boolean {
-  if (!contentWillChange(model, { inputType: 'insertLineBreak' })) return false;
+export function createAlignedEnvironment(model: _Model): boolean {
+  if (!model.contentWillChange({ inputType: 'insertLineBreak' })) return false;
   // creates aligned environment if not already present
   const [arrayAtom, [row, column]] = parentArray(model, 'after row', true);
 
@@ -501,7 +501,7 @@ export function createAlignedEnvironment(model: ModelPrivate): boolean {
     model.setPositionHandlingPlaceholder(pos);
   }
 
-  contentDidChange(model, { inputType: 'insertLineBreak' });
+  model.contentDidChange({ inputType: 'insertLineBreak' });
   return true;
 }
 
