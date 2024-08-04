@@ -18,9 +18,9 @@ import type {
   PrivateStyle,
   ToLatexOptions,
 } from '../core/types';
-import type { Context } from 'core/context';
-import type { Box } from 'core/box';
-import type { Parser } from 'core/parser';
+import type { Context } from '../core/context';
+import type { Box } from '../core/box';
+import type { Parser } from '../core/parser';
 
 export type FunctionArgumentDefinition = {
   isOptional: boolean;
@@ -32,8 +32,8 @@ export type Argument =
   | LatexValue
   | BBoxParameter
   | ColumnFormat[]
-  | { group: readonly Atom[] }
-  | readonly Atom[];
+  | { group: Readonly<Atom[]> }
+  | Readonly<Atom[]>;
 
 export type TokenDefinition = LatexSymbolDefinition | LatexCommandDefinition;
 
@@ -85,6 +85,7 @@ export type LatexCommandDefinition<T extends Argument[] = Argument[]> = {
   createAtom?: (options: CreateAtomOptions<T>) => Atom;
 
   applyStyle?: (
+    style: PrivateStyle,
     command: string,
     args: readonly (null | Argument)[],
     context: ContextInterface
@@ -108,7 +109,8 @@ export type EnvironmentDefinition = {
 
 export type EnvironmentConstructor = (
   name: Environment,
-  array: (readonly Atom[])[][],
-  rowGaps: readonly Dimension[],
-  args: readonly (null | Argument)[]
+  array: Readonly<Atom[]>[][],
+  rowGaps: Readonly<Dimension[]>,
+  args: readonly (null | Argument)[],
+  maxMatrixCols: number
 ) => Atom | null;

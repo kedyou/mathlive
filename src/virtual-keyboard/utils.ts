@@ -164,7 +164,12 @@ function alphabeticLayout(): NormalizedVirtualKeyboardLayout {
         row.push({
           label: k,
           class: 'hide-shift',
-          shift: { label: k.toUpperCase() },
+          shift: {
+            label: k.toUpperCase(),
+            variants: hasVariants(k.toUpperCase())
+              ? k.toUpperCase()
+              : undefined,
+          },
           variants: hasVariants(k) ? k : undefined,
         });
       } else if (k === '~') {
@@ -573,6 +578,7 @@ function makeLayout(
   if (!('layers' in layout)) return '';
   for (const layer of layout.layers) {
     markup.push(`<div tabindex="-1" class="MLK__layer" id="${layer.id}">`);
+
     if (keyboard.normalizedLayouts.length > 1 || layout.displayEditToolbar) {
       markup.push(`<div class='MLK__toolbar' role='toolbar'>`);
       markup.push(makeLayoutsToolbar(keyboard, index));
@@ -710,58 +716,61 @@ export function renderKeycap(
   return [markup, cls || 'MLK__keycap'];
 }
 
-const KEYCAP_SHORTCUTS: Record<string, Partial<VirtualKeyboardKeycap>> = {
+export const KEYCAP_SHORTCUTS: Record<
+  string,
+  Partial<VirtualKeyboardKeycap>
+> = {
   '[left]': {
     class: 'action hide-shift',
     label: '<svg class=svg-glyph><use xlink:href=#svg-arrow-left /></svg>',
-    command: ['performWithFeedback', 'moveToPreviousChar'],
+    command: 'performWithFeedback(moveToPreviousChar)',
     shift: {
       label:
         '<svg class=svg-glyph><use xlink:href=#svg-angle-double-left /></svg>',
-      command: ['performWithFeedback', 'extendSelectionBackward'],
+      command: 'performWithFeedback(extendSelectionBackward)',
     },
   },
   '[right]': {
     class: 'action hide-shift',
     label: '<svg class=svg-glyph><use xlink:href=#svg-arrow-right /></svg>',
-    command: ['performWithFeedback', 'moveToNextChar'],
+    command: 'performWithFeedback(moveToNextChar)',
     shift: {
       label:
         '<svg class=svg-glyph><use xlink:href=#svg-angle-double-right /></svg>',
-      command: ['performWithFeedback', 'extendSelectionForward'],
+      command: 'performWithFeedback(extendSelectionForward)',
     },
   },
   '[up]': {
     class: 'action hide-shift',
     label: '↑',
-    command: ['performWithFeedback', 'moveUp'],
+    command: 'performWithFeedback(moveUp)',
     shift: {
       label: '↟',
-      command: ['performWithFeedback', 'extendSelectionUpward'],
+      command: 'performWithFeedback(extendSelectionUpward)',
     },
   },
   '[down]': {
     class: 'action hide-shift',
     label: '↓',
-    command: ['performWithFeedback', 'moveDown'],
+    command: 'performWithFeedback(moveDown)',
     shift: {
       label: '↡',
-      command: ['performWithFeedback', 'extendSelectionDownward'],
+      command: 'performWithFeedback(extendSelectionDownward)',
     },
   },
   '[return]': {
     class: 'action hide-shift',
-    command: ['performWithFeedback', 'commit'],
-    shift: { command: ['performWithFeedback', 'addRowAfter'] },
+    command: 'performWithFeedback(commit)',
+    shift: { command: 'performWithFeedback(addRowAfter)' },
     width: 1.5,
     label: '<svg class=svg-glyph><use xlink:href=#svg-commit /></svg>',
   },
   '[action]': {
     class: 'action hide-shift',
-    command: ['performWithFeedback', 'createAlignedEnvironment'],
+    command: 'performWithFeedback(createAlignedEnvironment)',
     shift: {
       label: '<svg class=svg-glyph><use xlink:href=#circle-plus /></svg>',
-      command: ['performWithFeedback', 'addRowAfter'],
+      command: 'performWithFeedback(addRowAfter)',
     },
     width: 1.5,
     label: '<svg class=svg-glyph><use xlink:href=#svg-commit /></svg>',
@@ -778,14 +787,14 @@ const KEYCAP_SHORTCUTS: Record<string, Partial<VirtualKeyboardKeycap>> = {
   },
   '[.]': {
     variants: '.',
-    command: ['performWithFeedback', 'insertDecimalSeparator'],
+    command: 'performWithFeedback(insertDecimalSeparator)',
     shift: ',',
     class: 'big-op hide-shift',
     label: '.',
   },
   '[,]': {
     variants: ',',
-    command: ['performWithFeedback', 'insertDecimalSeparator'],
+    command: 'performWithFeedback(insertDecimalSeparator)',
     shift: '.',
     class: 'big-op hide-shift',
     label: ',',
@@ -845,7 +854,7 @@ const KEYCAP_SHORTCUTS: Record<string, Partial<VirtualKeyboardKeycap>> = {
   '[backspace]': {
     class: 'action bottom right hide-shift',
     width: 1.5,
-    command: ['performWithFeedback', 'deleteBackward'],
+    command: 'performWithFeedback(deleteBackward)',
     label: '<svg class=svg-glyph><use xlink:href=#svg-delete-backward /></svg>',
     shift: {
       class: 'action warning',
@@ -888,7 +897,7 @@ const KEYCAP_SHORTCUTS: Record<string, Partial<VirtualKeyboardKeycap>> = {
       '\\rangle',
       '\\rfloor',
       '\\rceil',
-      { latex: '\\rbrace', key: ']' },
+      { latex: '\\rbrace', key: '}' },
     ],
     key: ')',
     label: ')',
@@ -1020,43 +1029,50 @@ export function normalizeKeycap(
       key: KEYCAP_SHORTCUTS[keycap.key].key,
     };
   }
-  if (shortcut) {
-    if (shortcut.command === 'insertDecimalSeparator')
-      shortcut.label = globalThis.MathfieldElement.decimalSeparator ?? '.';
+  if (!shortcut) return keycap;
 
-    if (keycap.label === '[action]') {
-      shortcut = {
-        ...shortcut,
-        ...(window.mathVirtualKeyboard
-          .actionKeycap as Partial<VirtualKeyboardKeycap>),
-      };
-    }
-    if (keycap.label === '[shift]') {
-      shortcut = {
-        ...shortcut,
-        ...(window.mathVirtualKeyboard
-          .shiftKeycap as Partial<VirtualKeyboardKeycap>),
-      };
-    }
-    if (keycap.label === '[backspace]') {
-      shortcut = {
-        ...shortcut,
-        ...(window.mathVirtualKeyboard
-          .backspaceKeycap as Partial<VirtualKeyboardKeycap>),
-      };
-    }
-    if (keycap.label === '[tab]') {
-      shortcut = {
-        ...shortcut,
-        ...(window.mathVirtualKeyboard
-          .tabKeycap as Partial<VirtualKeyboardKeycap>),
-      };
-    }
+  if (shortcut.command === 'insertDecimalSeparator')
+    shortcut.label = globalThis.MathfieldElement.decimalSeparator ?? '.';
 
-    return shortcut;
+  if (
+    shortcut.tooltip === undefined ||
+    shortcut.tooltip === null ||
+    (shortcut.tooltip as any as boolean) === false
+  ) {
+    delete shortcut.tooltip;
   }
 
-  return keycap;
+  // If any of the properties of the shortcut are undefined, remove them
+  if (
+    shortcut.tooltip === undefined ||
+    shortcut.tooltip === null ||
+    (shortcut.tooltip as any as boolean) === false
+  ) {
+    delete shortcut.tooltip;
+  }
+
+  if (
+    shortcut.aside === undefined ||
+    shortcut.aside === null ||
+    (shortcut.aside as any as boolean) === false
+  )
+    delete shortcut.aside;
+
+  if (
+    shortcut.variants === undefined ||
+    shortcut.variants === null ||
+    (shortcut.variants as any as boolean) === false
+  )
+    delete shortcut.variants;
+
+  if (
+    shortcut.shift === undefined ||
+    shortcut.shift === null ||
+    (shortcut.shift as any as boolean) === false
+  )
+    delete shortcut.shift;
+
+  return shortcut;
 }
 
 let pressAndHoldTimer;

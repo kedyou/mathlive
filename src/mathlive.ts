@@ -59,17 +59,18 @@ export function globalMathLive(): MathLiveGlobal {
  *
  * @example
  * import { renderMathInDocument } from 'https://unpkg.com/mathlive?module';
- * if (window.readyState === "loading")
- *  document.addEventListener("DOMContentLoaded", () => renderMathInDocument());
- * else
- *   renderMathInDocument();
+ * renderMathInDocument();
  *
  * @category Static Rendering
  * @keywords render, document, autorender
  */
 
 export function renderMathInDocument(options?: StaticRenderOptions): void {
-  renderMathInElement(document.body, options);
+  if (document.readyState === 'loading')
+    document.addEventListener('DOMContentLoaded', () =>
+      renderMathInElement(document.body, options)
+    );
+  else renderMathInElement(document.body, options);
 }
 
 function getElement(element: string | HTMLElement): HTMLElement | null {
@@ -81,7 +82,7 @@ function getElement(element: string | HTMLElement): HTMLElement | null {
     return result;
   }
 
-  return typeof element === 'string' ? null : element;
+  return element;
 }
 
 /**
@@ -94,10 +95,7 @@ function getElement(element: string | HTMLElement): HTMLElement | null {
  *
  * @example
  * import { renderMathInElement } from 'https://unpkg.com/mathlive?module';
- * if (window.readyState === "loading")
- *  document.addEventListener("DOMContentLoaded", () => renderMathInElement("formula"));
- * else
- *   renderMathInElement("formula");
+ * renderMathInElement("formula");
  *
  * @category Static Rendering
  * @keywords render, element, htmlelement
@@ -107,8 +105,16 @@ export function renderMathInElement(
   element: string | HTMLElement,
   options?: StaticRenderOptions
 ): void {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () =>
+      renderMathInElement(element, options)
+    );
+    return;
+  }
+
   const el = getElement(element);
   if (!el) return;
+
   const optionsPrivate: StaticRenderOptionsPrivate = options ?? {};
   optionsPrivate.renderToMarkup ??= convertLatexToMarkup;
   optionsPrivate.renderToMathML ??= convertLatexToMathMl;

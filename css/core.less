@@ -85,11 +85,11 @@
   font-weight: bold;
 }
 
+
 /* Lowercase greek symbols should stick to math font when \mathbf is applied 
    to match TeX idiosyncratic behavior */
 .lcGreek.ML__mathbf {
   font-family: KaTeX_Math;
-  font-weight: normal;
 }
 
 .ML__mathbfit {
@@ -142,8 +142,7 @@
 .ML__series_sb {
   font-weight: 500;
 }
-.ML__bold,
-.ML__boldsymbol {
+.ML__bold {
   font-weight: 700;
 }
 .ML__series_eb {
@@ -352,7 +351,7 @@
   text-indent: 0;
   // Prevent a rendering bug that misplaces \vec in Chrome.
   text-rendering: auto;
-  font-family: KaTeX_Main, 'Times New Roman', serif;
+  font-family: inherit;
   font-style: normal;
   font-size-adjust: none;
   font-stretch: normal;
@@ -657,6 +656,11 @@
   }
 }
 
+// For \href command
+[data-href] {
+  cursor: pointer;
+}
+
 // Wavy pattern
 .ML__error {
   display: inline-block;
@@ -709,13 +713,13 @@
     width: max-content;
     max-width: 400px;
     padding: 12px 12px;
-    border-radius: 8px;
+    border: var(--tooltip-border);
+    border-radius: var(--tooltip-border-radius);
 
-    background: #616161; // Grey 700
-    --_selection-color: #fff;
-    color: #fff;
-    box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.14), 0 1px 5px 0 rgba(0, 0, 0, 0.12),
-      0 3px 1px -2px rgba(0, 0, 0, 0.2);
+    background: var(--tooltip-background-color);
+    --_selection-color: var(--tooltip-color);
+    color: var(--tooltip-color);
+    box-shadow: var(--tooltip-box-shadow);
     opacity: 0;
     // animation: .150s tooltipFadeOut cubic-bezier(0.4, 0.0, 1, 1) forwards;
     transition: opacity 0.15s cubic-bezier(0.4, 0, 1, 1);

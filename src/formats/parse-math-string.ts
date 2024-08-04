@@ -177,7 +177,7 @@ function parseMathExpression(
         options
       )}`;
     }
-  } else if (match) {
+  } else {
     return s.startsWith('(')
       ? '\\left(' + match + '\\right)' + parseMathExpression(rest, options)
       : match + parseMathExpression(rest, options);
@@ -189,7 +189,12 @@ function parseMathExpression(
 
   return s;
 }
-
+const FENCES = {
+  '[': '\\lbrack',
+  ']': '\\rbrack',
+  '{': '\\lbrace',
+  '}': '\\rbrace',
+};
 /**
  * Parse a math argument, as defined by ASCIIMath and UnicodeMath:
  * - Either an expression fenced in (), {} or []
@@ -225,21 +230,10 @@ function parseMathArgument(
 
     if (level === 0) {
       // We've found the matching closing fence
-      if (options.noWrap && lFence === '(')
-        match = parseMathExpression(s.substring(1, i - 1), options);
-      else {
-        if (lFence === '{' && rFence === '}') {
-          lFence = '\\{';
-          rFence = '\\}';
-        }
-
-        match =
-          '\\left' +
-          lFence +
-          parseMathExpression(s.substring(1, i - 1), options) +
-          '\\right' +
-          rFence;
-      }
+      const body = parseMathExpression(s.substring(1, i - 1), options);
+      if (options.noWrap && lFence === '(') match = body;
+      else
+        match = `\\left${FENCES[lFence] ?? lFence}${body}\\right${FENCES[rFence] ?? rFence}`;
 
       rest = s.slice(Math.max(0, i));
     } else {
@@ -310,15 +304,15 @@ export const MODE_SHIFT_COMMANDS = [
 ];
 
 export function trimModeShiftCommand(s: string): [boolean, string] {
-  const trimedString = s.trim();
+  const trimmedString = s.trim();
 
   for (const mode of MODE_SHIFT_COMMANDS) {
-    if (trimedString.startsWith(mode[0]) && trimedString.endsWith(mode[1])) {
+    if (trimmedString.startsWith(mode[0]) && trimmedString.endsWith(mode[1])) {
       return [
         true,
-        trimedString.substring(
+        trimmedString.substring(
           mode[0].length,
-          trimedString.length - mode[1].length
+          trimmedString.length - mode[1].length
         ),
       ];
     }

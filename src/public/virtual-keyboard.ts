@@ -29,6 +29,7 @@ export interface VirtualKeyboardKeycap {
    * Command to perform when the keycap is pressed
    */
   command:
+    | string
     | Selector
     | string[]
     | [string, any]
@@ -70,14 +71,6 @@ export interface VirtualKeyboardKeycap {
 
   /** Width of the keycap, as a multiple of the standard keycap width */
   width: 0.5 | 1.0 | 1.5 | 2.0 | 5.0;
-
-  /**
-   * HTML markup to represent the keycap.
-   *
-   * This property is only useful when using a custom keycap shape or appearance.
-   * Usually, setting the `label` property is sufficient.
-   */
-  // content: string;
 
   /**
    * Markup displayed with the key label (for example to explain what the
@@ -217,9 +210,29 @@ export interface VirtualKeyboardOptions {
       | Readonly<(VirtualKeyboardName | VirtualKeyboardLayout)[]>
   );
 
+  /**
+   * This property is the "expanded" version of the `layouts` property.
+   * It is normalized to include all the default values for the properties
+   * of the layout and layers.
+   */
   readonly normalizedLayouts: (VirtualKeyboardLayoutCore & {
     layers: NormalizedVirtualKeyboardLayer[];
   })[];
+
+  /**
+   * Some keycaps can be customized:
+   * `[left]`, `[right]`, `[up]`, `[down]`, `[return]`, `[action]`,
+   * `[space]`, `[tab]`, `[backspace]`, `[shift]`,
+   * `[undo]`, `[redo]`, `[foreground-color]`, `[background-color]`,
+   * `[hide-keyboard]`,
+   * `[.]`, `[,]`,
+   * `[0]`, `[1]`, `[2]`, `[3]`, `[4]`,
+   * `[5]`, `[6]`, `[7]`, `[8]`, `[9]`,
+   * `[+]`, `[-]`, `[*]`, `[/]`, `[^]`, `[_]`, `[=]`, `[.]`,
+   * `[(]`, `[)]`,
+   */
+  getKeycap(keycap: string): Partial<VirtualKeyboardKeycap> | undefined;
+  setKeycap(keycap: string, value: Partial<VirtualKeyboardKeycap>): void;
 
   /**
    * Configuration of the action toolbar, displayed on the right-hand side.
@@ -231,11 +244,6 @@ export interface VirtualKeyboardOptions {
 
   /** Layout of the alphabetic layers: AZERTY, QWERTY, etc... */
   set alphabeticLayout(value: AlphabeticKeyboardLayout);
-
-  set actionKeycap(value: string | Partial<VirtualKeyboardKeycap>);
-  set shiftKeycap(value: string | Partial<VirtualKeyboardKeycap>);
-  set backspaceKeycap(value: string | Partial<VirtualKeyboardKeycap>);
-  set tabKeycap(value: string | Partial<VirtualKeyboardKeycap>);
 
   /**
    * Element the virtual keyboard element gets appended to.
@@ -359,10 +367,7 @@ export type VirtualKeyboardMessage =
       layers: Record<string, string | Partial<VirtualKeyboardLayer>>;
       layouts: Readonly<(string | VirtualKeyboardLayout)[]>;
       editToolbar?: EditToolbarOptions;
-      actionKeycap: string | Partial<VirtualKeyboardKeycap>;
-      shiftKeycap: string | Partial<VirtualKeyboardKeycap>;
-      backspaceKeycap: string | Partial<VirtualKeyboardKeycap>;
-      tabKeycap: string | Partial<VirtualKeyboardKeycap>;
+      setKeycap: { keycap: string; value: Partial<VirtualKeyboardKeycap> };
       isShifted: boolean;
     }
   | {
@@ -373,10 +378,7 @@ export type VirtualKeyboardMessage =
       layers: Record<string, string | Partial<VirtualKeyboardLayer>>;
       layouts: Readonly<(VirtualKeyboardName | VirtualKeyboardLayout)[]>;
       editToolbar?: EditToolbarOptions;
-      actionKeycap: string | Partial<VirtualKeyboardKeycap>;
-      shiftKeycap: string | Partial<VirtualKeyboardKeycap>;
-      backspaceKeycap: string | Partial<VirtualKeyboardKeycap>;
-      tabKeycap: string | Partial<VirtualKeyboardKeycap>;
+      setKeycap: { keycap: string; value: Partial<VirtualKeyboardKeycap> };
     }
   | {
       // From proxy to VK

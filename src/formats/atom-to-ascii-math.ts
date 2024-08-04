@@ -6,7 +6,7 @@ import { LeftRightAtom } from '../atoms/leftright';
 import { ArrayAtom } from '../atoms/array';
 import { Style } from '../public/core-types';
 
-const SPECIAL_IDENTIFIERS = {
+const IDENTIFIERS = {
   '\\ne': '≠',
   '\\neq': '≠',
   '\u2212': '-', // MINUS SIGN
@@ -79,20 +79,9 @@ const SPECIAL_IDENTIFIERS = {
   '\\varOmega': 'Omega',
 };
 
-const SPECIAL_OPERATORS = {
+const OPERATORS = {
   '\\pm': '+-',
   '\\colon': ':',
-  '\\vert': '|',
-  '\\Vert': '||',
-  '\\mid': '|',
-  '\\lbrack': '[',
-  '\\rbrack': ']',
-  '\\lbrace': '{',
-  '\\rbrace': '}',
-  '\\lparen': '(',
-  '\\rparen': ')',
-  '\\langle': '(:',
-  '\\rangle': ':)',
   '\\sum': ' sum ',
   '\\prod': ' prod ',
   '\\bigcap': ' nnn ',
@@ -145,6 +134,20 @@ const SPECIAL_OPERATORS = {
   // '\\hat': '&#x005e;'
 };
 
+const FENCES = {
+  '\\vert': '|',
+  '\\Vert': '||',
+  '\\mid': '|',
+  '\\lbrack': '[',
+  '\\rbrack': ']',
+  '\\lbrace': '{',
+  '\\rbrace': '}',
+  '\\lparen': '(',
+  '\\rparen': ')',
+  '\\langle': '(:',
+  '\\rangle': ':)',
+};
+
 function joinAsciiMath(xs: string[]): string {
   let result = '';
   for (const x of xs) {
@@ -156,24 +159,31 @@ function joinAsciiMath(xs: string[]): string {
   return result;
 }
 
+/**
+ * If `plain` is true, the output will not include quotes around text mode
+ */
 export function atomToAsciiMath(
-  atom: Atom | readonly Atom[] | undefined
+  atom: Atom | Readonly<Atom[]> | undefined,
+  options?: { plain: boolean }
 ): string {
   if (!atom) return '';
   if (isArray<Atom>(atom)) {
     if (atom.length === 0) return '';
 
-    if (atom[0].mode === 'latex') return atom.map(atomToAsciiMath).join('');
+    if (atom[0].mode === 'latex')
+      return atom.map((x) => atomToAsciiMath(x)).join('');
 
     if (atom[0].mode === 'text') {
       // Text mode... put it in (ASCII) quotes
       let i = 0;
       let text = '';
       while (atom[i]?.mode === 'text') {
-        text += atom[i].body ? atomToAsciiMath(atom[i].body) : atom[i].value;
+        text += atom[i].body
+          ? atomToAsciiMath(atom[i].body, options)
+          : atom[i].value;
         i++;
       }
-
+      if (options?.plain) return text + atomToAsciiMath(atom.slice(i), options);
       return `"${text}" ${atomToAsciiMath(atom.slice(i))}`;
     }
 
@@ -184,19 +194,21 @@ export function atomToAsciiMath(
       while (atom[i] && atom[i].type === 'mord' && /\d/.test(atom[i].value))
         digits += atom[i++].value;
       if (digits) result.push(digits);
-      else result.push(atomToAsciiMath(atom[i++]));
+      else result.push(atomToAsciiMath(atom[i++], options));
     }
-    result.push(atomToAsciiMath(atom.slice(i)));
+    result.push(atomToAsciiMath(atom.slice(i), options));
     return joinAsciiMath(result);
   }
 
-  if (atom.mode === 'text') return `"${atom.value}"`;
+  if (atom.mode === 'text')
+    return options?.plain ? atom.value : `"${atom.value}"`;
 
   let result = '';
   const { command } = atom;
   let m;
 
-  if (command === '\\placeholder') return `(${atomToAsciiMath(atom.body)})`;
+  if (command === '\\placeholder')
+    return `(${atomToAsciiMath(atom.body, options)})`;
 
   switch (atom.type) {
     case 'accent':
@@ -213,7 +225,7 @@ export function atomToAsciiMath(
         '\\check': 'check', // non-standard
       }[command];
 
-      result = `${accent ?? ''} ${atomToAsciiMath(atom.body)} `;
+      result = `${accent ?? ''} ${atomToAsciiMath(atom.body, options)} `;
       break;
 
     case 'first':
@@ -224,7 +236,7 @@ export function atomToAsciiMath(
 
     case 'group':
     case 'root':
-      result = SPECIAL_IDENTIFIERS[command] ?? atomToAsciiMath(atom.body);
+      result = IDENTIFIERS[command] ?? atomToAsciiMath(atom.body, options);
       break;
 
     case 'genfrac':
@@ -239,14 +251,14 @@ export function atomToAsciiMath(
 
         if (genfracAtom.hasBarLine) {
           result += '(';
-          result += atomToAsciiMath(genfracAtom.above);
+          result += atomToAsciiMath(genfracAtom.above, options);
           result += ')/(';
-          result += atomToAsciiMath(genfracAtom.below);
+          result += atomToAsciiMath(genfracAtom.below, options);
           result += ')';
         } else {
           // No bar line, i.e. \choose, etc...
-          result += '(' + atomToAsciiMath(genfracAtom.above) + '),';
-          result += '(' + atomToAsciiMath(genfracAtom.below) + ')';
+          result += '(' + atomToAsciiMath(genfracAtom.above, options) + '),';
+          result += '(' + atomToAsciiMath(genfracAtom.below, options) + ')';
         }
 
         if (genfracAtom.leftDelim || genfracAtom.rightDelim) {
@@ -260,13 +272,10 @@ export function atomToAsciiMath(
       break;
 
     case 'surd':
-      result += !atom.hasEmptyBranch('above')
-        ? 'root(' +
-          atomToAsciiMath(atom.above) +
-          ')(' +
-          atomToAsciiMath(atom.body) +
-          ')'
-        : 'sqrt(' + atomToAsciiMath(atom.body) + ')';
+      if (atom.hasEmptyBranch('above'))
+        result += `sqrt(${atomToAsciiMath(atom.body, options)})`;
+      else
+        result += `root(${atomToAsciiMath(atom.above, options)})(${atomToAsciiMath(atom.body, options)})`;
       break;
 
     case 'latex':
@@ -276,10 +285,14 @@ export function atomToAsciiMath(
     case 'leftright':
       {
         const leftrightAtom = atom as LeftRightAtom;
-        const lDelim = leftrightAtom.leftDelim;
+
+        let lDelim = leftrightAtom.leftDelim;
+        if (lDelim && FENCES[lDelim]) lDelim = FENCES[lDelim];
         result += lDelim === '.' || !lDelim ? '{:' : lDelim;
-        result += atomToAsciiMath(leftrightAtom.body);
-        const rDelim = leftrightAtom.matchingRightDelim();
+        result += atomToAsciiMath(leftrightAtom.body, options);
+
+        let rDelim = leftrightAtom.matchingRightDelim();
+        if (rDelim && FENCES[rDelim]) rDelim = FENCES[rDelim];
         result += rDelim === '.' || !rDelim ? ':}' : rDelim;
       }
 
@@ -287,7 +300,7 @@ export function atomToAsciiMath(
 
     case 'sizeddelim':
     case 'delim':
-      // Result += '<mo separator="true"' + makeID(atom.id, options) + '>' + (SPECIAL_OPERATORS[atom.delim] || atom.delim) + '</mo>';
+      // Result += '<mo separator="true"' + makeID(atom.id, options) + '>' + (FENCES[atom.delim] || atom.delim) + '</mo>';
       result = atom.value;
       break;
 
@@ -299,7 +312,7 @@ export function atomToAsciiMath(
 
     case 'mord':
       result =
-        SPECIAL_IDENTIFIERS[command!] ??
+        IDENTIFIERS[command!] ??
         command ??
         (typeof atom.value === 'string' ? atom.value : '');
       if (result.startsWith('\\')) result += ' ';
@@ -321,10 +334,7 @@ export function atomToAsciiMath(
     case 'mbin':
     case 'mrel':
     case 'minner':
-      result =
-        SPECIAL_IDENTIFIERS[command!] ??
-        SPECIAL_OPERATORS[command!] ??
-        atom.value;
+      result = IDENTIFIERS[command!] ?? OPERATORS[command!] ?? atom.value;
       break;
 
     case 'mopen':
@@ -333,7 +343,7 @@ export function atomToAsciiMath(
       break;
 
     case 'mpunct':
-      result = SPECIAL_OPERATORS[command!] ?? command;
+      result = OPERATORS[command!] ?? command;
       break;
 
     case 'mop':
@@ -341,11 +351,11 @@ export function atomToAsciiMath(
     case 'extensible-symbol':
       // Not ZERO-WIDTH
       if (atom.value !== '\u200B') {
-        if (SPECIAL_OPERATORS[command!]) result = SPECIAL_OPERATORS[command!];
+        if (OPERATORS[command!]) result = OPERATORS[command!];
         else {
           result =
             command === '\\operatorname'
-              ? atomToAsciiMath(atom.body)
+              ? atomToAsciiMath(atom.body, options)
               : atom.value ?? command;
         }
         result += ' ';
@@ -363,7 +373,9 @@ export function atomToAsciiMath(
       for (const row of array) {
         const cells: string[] = [];
         for (const cell of row)
-          cells.push(rowDelim[0] + atomToAsciiMath(cell) + rowDelim[1]);
+          cells.push(
+            rowDelim[0] + atomToAsciiMath(cell, options) + rowDelim[1]
+          );
 
         rows.push(cells.join(','));
       }
@@ -380,11 +392,11 @@ export function atomToAsciiMath(
       break;
 
     case 'spacing':
-      result = SPECIAL_IDENTIFIERS[command] ?? ' ';
+      result = IDENTIFIERS[command] ?? ' ';
       break;
 
     case 'enclose':
-      result = '(' + atomToAsciiMath(atom.body) + ')';
+      result = '(' + atomToAsciiMath(atom.body, options) + ')';
       break;
 
     case 'space':
@@ -397,22 +409,22 @@ export function atomToAsciiMath(
 
     case 'macro':
       result =
-        SPECIAL_IDENTIFIERS[command] ??
-        SPECIAL_OPERATORS[command] ??
-        atomToAsciiMath(atom.body);
+        IDENTIFIERS[command] ??
+        OPERATORS[command] ??
+        atomToAsciiMath(atom.body, options);
       break;
   }
 
   // Subscripts before superscripts (according to the ASCIIMath spec)
   if (!atom.hasEmptyBranch('subscript')) {
     result += '_';
-    const arg = atomToAsciiMath(atom.subscript);
+    const arg = atomToAsciiMath(atom.subscript, options);
     result += arg.length !== 1 ? `(${arg})` : arg;
   }
 
   if (!atom.hasEmptyBranch('superscript')) {
     result += '^';
-    const arg = atomToAsciiMath(atom.superscript);
+    const arg = atomToAsciiMath(atom.superscript, options);
     result += arg.length !== 1 ? `(${arg})` : arg;
   }
 

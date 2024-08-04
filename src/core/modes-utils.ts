@@ -33,7 +33,7 @@ export abstract class Mode {
   }
 
   static serialize(
-    atoms: readonly Atom[] | undefined,
+    atoms: Readonly<Atom[]> | undefined,
     options: ToLatexOptions
   ): string {
     if (!atoms || atoms.length === 0) return '';
@@ -74,7 +74,7 @@ export abstract class Mode {
     style?: Style
   ): Atom | null;
 
-  abstract serialize(run: readonly Atom[], options: ToLatexOptions): string[];
+  abstract serialize(run: Readonly<Atom[]>, options: ToLatexOptions): string[];
 
   /*
    * Calculate the effective font name to be used for metrics
@@ -97,7 +97,7 @@ export abstract class Mode {
 /*
  * Return an array of runs with the same mode
  */
-export function getModeRuns(atoms: readonly Atom[]): readonly Atom[][] {
+export function getModeRuns(atoms: Readonly<Atom[]>): Readonly<Atom[]>[] {
   const result: Atom[][] = [];
   let run: Atom[] = [];
   let currentMode = 'NONE';
@@ -115,47 +115,86 @@ export function getModeRuns(atoms: readonly Atom[]): readonly Atom[][] {
   return result;
 }
 
+/** This "weight" is only for math mode. Text mode uses fontSeries. */
+export function weightString(atom: Atom): string {
+  if (!atom || atom.mode !== 'math') return '';
+  const { style } = atom;
+  if (!style) return '';
+  if (!style.variantStyle) return '';
+  if (style.variantStyle === 'bold' || style.variantStyle === 'bolditalic')
+    return 'bold';
+
+  return '';
+}
+
+/** Combine variant and variantStyle in one string */
+export function variantString(atom: Atom): string {
+  if (!atom) return '';
+  const { style } = atom;
+  if (!style) return '';
+
+  let result = style.variant;
+  if (result === undefined) return 'normal';
+
+  if (
+    ![
+      'calligraphic',
+      'fraktur',
+      'double-struck',
+      'script',
+      'monospace',
+      'sans-serif',
+    ].includes(result) &&
+    style.variantStyle
+  )
+    result += '-' + style.variantStyle;
+
+  return result;
+}
+
 /*
  * Return an array of runs (array of atoms with the same value
  *   for the specified property)
  */
 export function getPropertyRuns(
-  atoms: readonly Atom[],
-  property: keyof Style
-): readonly Atom[][] {
+  atoms: Readonly<Atom[]>,
+  property: keyof Style | 'bold'
+): Readonly<Atom[]>[] {
   const result: Atom[][] = [];
   let run: Atom[] = [];
   let currentValue: string | number | undefined = undefined;
   for (const atom of atoms) {
-    if (atom.type !== 'first' && atom.style) {
-      let value: string | number | undefined;
-      if (property === 'variant') {
-        value = atom.style.variant;
-        if (atom.style.variantStyle && atom.style.variantStyle !== 'up')
-          value += '-' + atom.style.variantStyle;
-      } else value = atom.style[property];
+    if (atom.type === 'first') continue;
+    // The 'variant' property combines the variant and variantStyle
+    let value;
+    if (property === 'variant') value = variantString(atom);
+    else if (property === 'bold') value = weightString(atom);
+    else value = atom.style[property];
 
-      if (value === currentValue) {
-        // Same value, add it to the current run
-        run.push(atom);
-      } else {
-        // The value of property for this atom is different from the
-        // current value, start a new run
-        if (run.length > 0) result.push(run);
-        run = [atom];
-        currentValue = value;
-      }
+    if (value === currentValue) {
+      // Same value, add it to the current run
+      run.push(atom);
+    } else {
+      // The value of property for this atom is different from the
+      // current value, start a new run
+      if (run.length > 0) result.push(run);
+      run = [atom];
+      currentValue = value;
     }
   }
 
   // Push whatever is left
   if (run.length > 0) result.push(run);
+
   return result;
 }
 
-function emitColorRun(run: readonly Atom[], options: ToLatexOptions): string[] {
+function emitColorRun(
+  run: Readonly<Atom[]>,
+  options: ToLatexOptions
+): string[] {
   const { parent } = run[0];
-  const parentColor = parent?.computedStyle.color;
+  const parentColor = parent?.style.color;
 
   const result: string[] = [];
   // Since `\textcolor{}` applies to both text and math mode, wrap mode first, then
@@ -164,7 +203,7 @@ function emitColorRun(run: readonly Atom[], options: ToLatexOptions): string[] {
     const mode = options.defaultMode;
 
     for (const colorRun of getPropertyRuns(modeRun, 'color')) {
-      const style = colorRun[0].computedStyle;
+      const style = colorRun[0].style;
       const body = Mode._registry[colorRun[0].mode].serialize(colorRun, {
         ...options,
         defaultMode: mode === 'text' ? 'text' : 'math',
@@ -190,14 +229,14 @@ function emitColorRun(run: readonly Atom[], options: ToLatexOptions): string[] {
 }
 
 function emitBackgroundColorRun(
-  run: readonly Atom[],
+  run: Readonly<Atom[]>,
   options: ToLatexOptions
 ): string[] {
   const { parent } = run[0];
-  const parentColor = parent?.computedStyle.backgroundColor;
+  const parentColor = parent?.style.backgroundColor;
   return getPropertyRuns(run, 'backgroundColor').map((x) => {
     if (x.length > 0 || x[0].type !== 'box') {
-      const style = x[0].computedStyle;
+      const style = x[0].style;
       if (
         style.backgroundColor &&
         style.backgroundColor !== 'none' &&
@@ -215,15 +254,15 @@ function emitBackgroundColorRun(
 }
 
 function emitFontSizeRun(
-  run: readonly Atom[],
+  run: Readonly<Atom[]>,
   options: ToLatexOptions
 ): string[] {
   if (run.length === 0) return [];
   const { parent } = run[0];
-  const contextFontsize = parent?.computedStyle.fontSize;
+  const contextFontsize = parent?.style.fontSize;
   const result: string[] = [];
   for (const sizeRun of getPropertyRuns(run, 'fontSize')) {
-    const fontsize = sizeRun[0].computedStyle.fontSize;
+    const fontsize = sizeRun[0].style.fontSize;
     const body = emitBackgroundColorRun(sizeRun, options);
     if (body) {
       if (

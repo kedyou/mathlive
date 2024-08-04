@@ -15,12 +15,12 @@ import type {
   VirtualKeyboardMessageAction,
 } from '../public/virtual-keyboard';
 import type { OriginValidator } from '../public/options';
-import type { MathfieldElement } from '../public/mathfield-element';
+import { MathfieldElement } from '../public/mathfield-element';
 
 import { isTouchCapable } from '../ui/utils/capabilities';
 import { isArray } from '../common/types';
 import { validateOrigin } from '../editor-mathfield/utils';
-import { getCommandTarget, COMMANDS } from '../editor/commands';
+import { getCommandTarget, COMMANDS, parseCommand } from '../editor/commands';
 import { SelectorPrivate } from '../editor/types';
 
 import { isVirtualKeyboardMessage, VIRTUAL_KEYBOARD_MESSAGE } from './proxy';
@@ -30,11 +30,13 @@ import {
   releaseStylesheets,
   normalizeLayout,
   renderKeycap,
+  normalizeKeycap,
+  KEYCAP_SHORTCUTS,
 } from './utils';
 
 import { hideVariantsPanel, showVariantsPanel } from './variants';
 import { Style } from '../public/core-types';
-import { deepActiveElement } from 'ui/events/utils';
+import { deepActiveElement } from '../ui/events/utils';
 
 export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
   private _visible: boolean;
@@ -112,10 +114,18 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
     return id;
   }
 
+  setKeycap(
+    keycap: string,
+    value: string | Partial<VirtualKeyboardKeycap>
+  ): void {
+    KEYCAP_SHORTCUTS[keycap] = normalizeKeycap(value);
+    this.rebuild();
+  }
+
   getKeycap(
     id: string | undefined
   ): Partial<VirtualKeyboardKeycap> | undefined {
-    return id ? this.keycapRegistry[id] : undefined;
+    return id ? KEYCAP_SHORTCUTS[id] ?? this.keycapRegistry[id] : undefined;
   }
 
   getLayer(id: string): NormalizedVirtualKeyboardLayer | undefined {
@@ -132,37 +142,8 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
   }
   set alphabeticLayout(value: AlphabeticKeyboardLayout) {
     this._alphabeticLayout = value;
+    this._normalizedLayouts = undefined;
     this.rebuild();
-  }
-
-  private _actionKeycap: Partial<VirtualKeyboardKeycap>;
-  get actionKeycap(): Partial<VirtualKeyboardKeycap> {
-    return this._actionKeycap;
-  }
-  set actionKeycap(value: string | Partial<VirtualKeyboardKeycap>) {
-    this._actionKeycap = typeof value === 'string' ? { label: value } : value;
-  }
-  private _shiftKeycap: Partial<VirtualKeyboardKeycap>;
-  get shiftKeycap(): Partial<VirtualKeyboardKeycap> {
-    return this._shiftKeycap;
-  }
-  set shiftKeycap(value: string | Partial<VirtualKeyboardKeycap>) {
-    this._shiftKeycap = typeof value === 'string' ? { label: value } : value;
-  }
-  private _backspaceKeycap: Partial<VirtualKeyboardKeycap>;
-  get backspaceKeycap(): Partial<VirtualKeyboardKeycap> {
-    return this._backspaceKeycap;
-  }
-  set backspaceKeycap(value: string | Partial<VirtualKeyboardKeycap>) {
-    this._backspaceKeycap =
-      typeof value === 'string' ? { label: value } : value;
-  }
-  private _tabKeycap: Partial<VirtualKeyboardKeycap>;
-  get tabKeycap(): Partial<VirtualKeyboardKeycap> {
-    return this._tabKeycap;
-  }
-  set tabKeycap(value: string | Partial<VirtualKeyboardKeycap>) {
-    this._tabKeycap = typeof value === 'string' ? { label: value } : value;
   }
 
   private _layouts: Readonly<(VirtualKeyboardName | VirtualKeyboardLayout)[]>;
@@ -227,8 +208,9 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
     this.rebuild();
   }
 
-  private _container: HTMLElement | null;
+  private _container: HTMLElement | undefined | null;
   get container(): HTMLElement | null {
+    if (this._container === undefined) return window.document.body;
     return this._container;
   }
   set container(value: HTMLElement | null) {
@@ -264,7 +246,7 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
     this._layouts = Object.freeze(['default']);
     this._editToolbar = 'default';
 
-    this._container = window.document?.body ?? null;
+    this._container = undefined;
 
     this._visible = false;
     this._rebuilding = false;
@@ -677,6 +659,11 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
       if (msg.alphabeticLayout) this.alphabeticLayout = msg.alphabeticLayout;
       if (msg.layouts) this.layouts = msg.layouts;
       if (msg.editToolbar) this.editToolbar = msg.editToolbar;
+      if (msg.setKeycap) {
+        const { keycap, value } = msg.setKeycap;
+        this.setKeycap(keycap, value);
+        this.render();
+      }
       return;
     }
 
@@ -702,7 +689,17 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
     payload: any,
     target?: MessageEventSource | null
   ): void {
+    // Dispatch an event. The listeners must listen to `mathVirtualKeyboard`
+    if (payload.command) {
+      this.dispatchEvent(
+        new CustomEvent('math-virtual-keyboard-command', {
+          detail: payload.command,
+        })
+      );
+    }
+
     if (!target) target = this.connectedMathfieldWindow;
+
     if (
       this.targetOrigin === null ||
       this.targetOrigin === 'null' ||
@@ -720,6 +717,7 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
       );
       return;
     }
+
     if (target) {
       target.postMessage(
         {
@@ -730,13 +728,6 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
         { targetOrigin: this.targetOrigin }
       );
     } else {
-      if (payload.command) {
-        this.dispatchEvent(
-          new CustomEvent('math-virtual-keyboard-command', {
-            detail: payload.command,
-          })
-        );
-      }
       if (
         action === 'execute-command' &&
         Array.isArray(payload.command) &&
@@ -756,7 +747,7 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
   }
 
   stateWillChange(visible: boolean): boolean {
-    const defaultNotPrevented = this.dispatchEvent(
+    const success = this.dispatchEvent(
       new CustomEvent('before-virtual-keyboard-toggle', {
         detail: { visible },
         bubbles: true,
@@ -764,7 +755,7 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
         composed: true,
       })
     );
-    return defaultNotPrevented;
+    return success;
   }
 
   stateChanged(): void {
@@ -826,6 +817,11 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
   executeCommand(
     command: SelectorPrivate | [SelectorPrivate, ...any[]]
   ): boolean {
+    command = parseCommand(command) as
+      | SelectorPrivate
+      | [SelectorPrivate, ...any[]];
+    if (!command) return false;
+
     let selector: SelectorPrivate;
     let args: string[] = [];
     let target = getCommandTarget(command);
@@ -833,16 +829,12 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
     if (isArray(command)) {
       selector = command[0];
       if (selector === 'performWithFeedback') {
-        command = command.slice(1) as [SelectorPrivate, ...any[]];
-        target = getCommandTarget(command);
+        target = getCommandTarget(
+          command.slice(1) as [SelectorPrivate, ...any[]]
+        );
       }
       args = command.slice(1);
     } else selector = command;
-
-    // Convert kebab case (like-this) to camel case (likeThis).
-    selector = selector.replace(/-\w/g, (m) =>
-      m[1].toUpperCase()
-    ) as SelectorPrivate;
 
     if (target === 'virtual-keyboard')
       return COMMANDS[selector]!.fn(undefined, ...args);
@@ -862,11 +854,8 @@ function focusedMathfield(): MathfieldElement | null {
   let target: Node | null = deepActiveElement() as unknown as Node | null;
   let mf: MathfieldElement | null = null;
   while (target) {
-    if (
-      'host' in target &&
-      (target.host as HTMLElement)?.tagName?.toLowerCase() === 'math-field'
-    ) {
-      mf = target.host as MathfieldElement;
+    if ('host' in target && target.host instanceof MathfieldElement) {
+      mf = target.host;
       break;
     }
     target = target.parentNode;

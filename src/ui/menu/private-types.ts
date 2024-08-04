@@ -53,7 +53,7 @@ export interface MenuItemState<T = unknown> {
 export interface MenuListState {
   readonly rootMenu: RootMenuState;
   readonly parentMenu: MenuListState | null;
-  readonly children: readonly MenuItemState[];
+  readonly children: Readonly<MenuItemState[]>;
 
   readonly element: HTMLElement | null;
   isSubmenuOpen: boolean;
@@ -69,7 +69,7 @@ export interface MenuListState {
 
   /** True if at least one item (except a divider) is enabled */
   readonly enabled: boolean;
-  /** True if at least one item (execept a divider) is visible */
+  /** True if at least one item (except a divider) is visible */
   readonly visible: boolean;
 
   /** Set to true by one of its menu items when the menu item need to be refreshed (flows up) */
@@ -87,6 +87,7 @@ export interface MenuListState {
   findMenuItem(text: string): MenuItemState | null;
   getMenuItemColumn(menuItem: MenuItemState): number;
   dispatchEvent(ev: Event): boolean;
+  host: HTMLElement | null;
 }
 
 /** @internal */

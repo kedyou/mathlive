@@ -41,6 +41,8 @@
   align-items: flex-end;
   min-height: 39px; /* Need some room for the virtual keyboard toggle */
   width: 100%;
+  padding: 4px;
+  box-sizing: border-box;
 
   /* This attribute is necessary to work around a Firefox issue where 
   where clicking multiple times on the border leads to a focused mathfield that cannot be edited until focus is lost and regained (also fixes the multiple cursor issue on firefox that can occur with the same sequence of events).
@@ -86,7 +88,7 @@
   // The border color when a prompt is in "incorrect" state
   --_incorrect-color: var(--incorrect-color, #a01b00);
 
-  // A composition is zone controled by an input method, for example, the
+  // A composition is zone controlled by an input method, for example, the
   // Japanese input method, or dead keys on macOS, i.e. alt+U.
   --_composition-background-color: var(--composition-background-color, #fff1c2);
   --_composition-text-color: var(--composition-text-color, black);
@@ -94,6 +96,26 @@
     --composition-underline-color,
     transparent
   );
+
+  // Tooltip displayed with \mathtip or \texttip
+  --_tooltip-border: var(--tooltip-border, 1px solid transparent);
+  --_tooltip-border-radius: var(--tooltip-border-radius, 8px);
+  --_tooltip-background-color: var(--tooltip-background-color, #616161);
+  --_tooltip-color: var(--tooltip-color, #fff);
+  --_tooltip-box-shadow: var(
+    --tooltip-box-shadow,
+    0 2px 2px 0 rgba(0, 0, 0, 0.14), 
+    0 1px 5px 0 rgba(0, 0, 0, 0.12), 
+    0 3px 1px -2px rgba(0, 0, 0, 0.2)
+  );
+}
+
+// prevent pointer-down event on touch devices if the host isn't focused
+// this allows scrolling if you touch unfocused fields
+@media (hover: none) and (pointer: coarse) {
+  :host(:not(:focus)) .ML__container {
+    pointer-events: none;
+  }
 }
 
 // @media (prefers-color-scheme: dark) {
@@ -297,10 +319,6 @@ with this style */
   background: var(--_selection-background-color) !important;
 }
 
-:host {
-  pointer-events: none;
-}
-
 .ML__contains-caret.ML__close,
 .ML__contains-caret.ML__open,
 .ML__contains-caret > .ML__close,
@@ -455,11 +473,17 @@ menu .ML__base {
   padding: 8px;
 }
 
-.variant-submenu [part='menu-item'] {
+.variant-submenu [part='menu-item'].ML__xl {
   font-size: 2rem;
   text-align: center;
   margin: 0;
 }
+
+.ML__center-menu .label {
+  text-align: center;
+}
+
+
 
 .insert-matrix-submenu {
   /* Grid doesn't work on Safari */
@@ -548,4 +572,14 @@ menu .ML__base {
   &.dark-contrast .ui-mixedmark {
     color: #000;
   }
+}
+
+
+.ML__insert-template  {
+  font-size: 1em;
+}
+
+.ML__insert-label {
+  opacity: .5;
+  margin-left: 2ex
 }

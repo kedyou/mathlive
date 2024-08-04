@@ -29,7 +29,7 @@ import { Scrim } from '../ui/utils/scrim';
 import {
   deepActiveElement,
   mightProducePrintableCharacter,
-} from 'ui/events/utils';
+} from '../ui/events/utils';
 
 export interface KeyboardDelegate {
   cancelComposition: () => void;
@@ -325,6 +325,7 @@ export function delegateKeyboardEvents(
       keyboardSink.setAttribute('aria-label', value),
 
     setValue: (value: string): void => {
+      if (keyboardSink.textContent === value) return;
       keyboardSink.textContent = value;
       // Move sink offscreen (Safari will display a visible selection otherwise)
       keyboardSink.style.left = `-1000px`;

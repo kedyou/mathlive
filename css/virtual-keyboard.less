@@ -113,7 +113,7 @@
     calc(var(--keycap-font-size) / 1.42)
   );
 
-  --_variant-panel-background: var(--variant-panel-background, f0f0f0);
+  --_variant-panel-background: var(--variant-panel-background, #f0f0f0);
   --_variant-keycap-text: var(--variant-keycap-text, var(--_keycap-text));
   --_variant-keycap-text-active: var(
     --variant-keycap-text-active,
@@ -136,6 +136,10 @@
 
   --_box-placeholder-color: var(--box-placeholder-color, var(--_accent-color));
   --_box-placeholder-pressed-color: var(--box-placeholder-pressed-color, var(--keycap-text-pressed));
+
+  --_keycap-glyph-size: var(--keycap-glyph-size, 20px);
+  --_keycap-glyph-size-lg: var(--keycap-glyph-size-lg, 24px);
+  --_keycap-glyph-size-xl: var(--keycap-glyph-size-xl, 50px);
 }
 
 .is-math-mode .MLK__rows .if-text-mode,
@@ -509,9 +513,9 @@ body > .ML__keyboard.is-visible.animate > .MLK__backdrop {
     background: #cd0030;
     color: white;
     svg.svg-glyph {
-      width: 24px;
-      height: 24px;
-      min-height: 24px;
+      width: var(--_keycap-glyph-size-lg);
+      height: var(--_keycap-glyph-size-lg);
+      min-height: var(--_keycap-glyph-size-lg);
     }
   }
 
@@ -564,15 +568,15 @@ body > .ML__keyboard.is-visible.animate > .MLK__backdrop {
 
     svg.svg-glyph {
       margin: 8px 0;
-      width: 20px;
-      height: 20px;
-      min-height: 20px;
+      width: var(--_keycap-glyph-size);
+      height: var(--_keycap-glyph-size);
+      min-height: var(--_keycap-glyph-size);
     }
     svg.svg-glyph-lg {
       margin: 8px 0;
-      width: 24px;
-      height: 24px;
-      min-height: 24px;
+      width: var(--_keycap-glyph-size-lg);
+      height: var(--_keycap-glyph-size-lg);
+      min-height: var(--_keycap-glyph-size-lg);
     }
 
     &.MLK__tex-math {
@@ -837,10 +841,12 @@ Note there are a different set of tooltip rules for the keyboard toggle
     &.is-active {
       background: var(--_variant-keycap-background-active);
       color: var(--_variant-keycap-text-active);
+      --_box-placeholder-color: var(--_box-placeholder-pressed-color);
     }
     &.is-pressed {
       background: var(--_variant-keycap-background-pressed);
       color: var(--_variant-keycap-text-pressed);
+      --_box-placeholder-color: var(--_box-placeholder-pressed-color);
     }
     &.small {
       font-size: var(--_keycap-small-font-size);
@@ -882,8 +888,8 @@ Note there are a different set of tooltip rules for the keyboard toggle
         background: red;
       }
       svg.svg-glyph {
-        width: 50px;
-        height: 50px;
+        width: var(--_keycap-glyph-size-xl);
+        height: var(--_keycap-glyph-size-xl);
       }
     }
     aside {
@@ -1143,7 +1149,7 @@ Note there are a different set of tooltip rules for the keyboard toggle
     #989da6
   );
 
-  --_variant-panel-background: var(--variant-panel-background, #fff);
+  --_variant-panel-background: var(--variant-panel-background, #f0f0f0);
   --_variant-keycap-text: var(--variant-keycap-textvar, var(--_keycap-text));
   --_variant-keycap-text-active: var(
     --variant-keycap-text-active,
