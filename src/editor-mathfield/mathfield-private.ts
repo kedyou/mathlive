@@ -812,7 +812,9 @@ If you are using Vue, this may be because you are using the runtime-only build o
         break;
 
       case 'pointerdown':
-        if (!evt.defaultPrevented && this.userSelect !== 'none') {
+        // Comment out this.userSelect !== none because it breaks on Chrome
+        // https://github.com/kedyou/kedyou-frontend/issues/1150
+        if (!evt.defaultPrevented /** && this.userSelect !== 'none'  */) {
           onPointerDown(this, evt as PointerEvent);
           // Firefox convention: holding the shift key disables custom context menu
           if ((evt as PointerEvent).shiftKey === false) {
@@ -1240,8 +1242,8 @@ If you are using Vue, this may be because you are using the runtime-only build o
             mode === 'latex'
               ? 'latex'
               : mode === 'math'
-                ? 'plain-text'
-                : 'ascii-math';
+              ? 'plain-text'
+              : 'ascii-math';
 
           const selRange = range(model.selection);
           let content = this.model.getValue(selRange, format);
