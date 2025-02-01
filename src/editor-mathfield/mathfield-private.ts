@@ -807,7 +807,9 @@ If you are using Vue, this may be because you are using the runtime-only build o
         break;
 
       case 'pointerdown':
-        if (!evt.defaultPrevented && this.userSelect !== 'none') {
+        // Kedyou: comment out this.userSelect !== none because it breaks on Chrome
+        // https://github.com/kedyou/kedyou-frontend/issues/1150
+        if (!evt.defaultPrevented /** && this.userSelect !== 'none'  */) {
           onPointerDown(this, evt as PointerEvent);
           // Firefox convention: holding the shift key disables custom context menu
           if ((evt as PointerEvent).shiftKey === false) {
@@ -1637,7 +1639,7 @@ If you are using Vue, this may be because you are using the runtime-only build o
         new InputEvent('beforeinput', {
           ...options,
           // To work around a bug in WebKit/Safari (the inputType property gets stripped), include the inputType as the 'data' property. (see #1843)
-          data: options.data ? options.data : (options.inputType ?? ''),
+          data: options.data ? options.data : options.inputType ?? '',
           cancelable: true,
           bubbles: true,
           composed: true,
