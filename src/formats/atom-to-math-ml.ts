@@ -39,15 +39,12 @@ function scanIdentifier(stream: MathMLStream, final: number, options) {
   let body = '';
   let atom: Atom = stream.atoms[stream.index];
 
-  const variant = atom.style?.variant ?? '';
-  const variantStyle = atom.style?.variantStyle ?? '';
+  const variant = atom.style?.variant;
+  const variantStyle = atom.style?.variantStyle;
   let variantProp = '';
-  if (variant || variantStyle) {
-    const unicodeVariant = mathVariantToUnicode(
-      atom.value,
-      atom.style?.variant,
-      atom.style?.variantStyle
-    );
+  if (atom.value && (variant || variantStyle)) {
+    const unicodeVariant =
+      mathVariantToUnicode(atom.value, variant, variantStyle) ?? atom.value;
     if (unicodeVariant !== atom.value) {
       stream.index += 1;
       mathML = `<mi${makeID(atom.id, options)}>${unicodeVariant}</mi>`;
@@ -79,8 +76,8 @@ function scanIdentifier(stream: MathMLStream, final: number, options) {
         'italicsans-serif': 'sans-serif-italic',
         'bolditalicsans-serif': 'sans-serif-bold-italic',
         'monospace': 'monospace',
-      }[variantStyle + variant] ?? '';
-    variantProp = ` mathvariant="${variantProp}"`;
+      }[(variantStyle ?? '') + (variant ?? '')] ?? '';
+    if (variantProp) variantProp = ` mathvariant="${variantProp}"`;
   }
 
   const SPECIAL_IDENTIFIERS = {
@@ -511,7 +508,7 @@ function scanOperator(stream: MathMLStream, final: number, options) {
  * @param final last index of the input to stop conversion to
  */
 export function toMathML(
-  input: number | boolean | string | Atom | readonly Atom[] | undefined,
+  input: number | boolean | string | Atom | Readonly<Atom[]> | undefined,
   options?: { generateID?: boolean },
   initial?: number,
   final?: number

@@ -51,7 +51,7 @@ export type MenuItemCommand<T = unknown> = {
   tooltip?: DynamicValue<string>;
 
   /** A CSS class applied to the item */
-  class?: string;
+  class?: DynamicValue<string>;
 
   keyboardShortcut?: string;
 
@@ -69,6 +69,7 @@ export type MenuItemCommand<T = unknown> = {
    * and this hook is called.
    */
   onMenuSelect?: (_: {
+    target: EventTarget | undefined;
     modifiers: KeyboardModifiers;
     id?: string;
     data?: T;
@@ -94,7 +95,7 @@ export type MenuItemHeading = {
   label?: DynamicValue<string>;
   ariaLabel?: DynamicValue<string>;
   tooltip?: DynamicValue<string>;
-  class?: string;
+  class?: DynamicValue<string>;
 };
 
 export type MenuItemSubmenu = {
@@ -103,9 +104,9 @@ export type MenuItemSubmenu = {
   label?: DynamicValue<string>;
   ariaLabel?: DynamicValue<string>;
   tooltip?: DynamicValue<string>;
-  class?: string;
+  class?: DynamicValue<string>;
 
-  submenu: readonly MenuItem[];
+  submenu: Readonly<MenuItem[]>;
 
   visible?: DynamicValue<boolean>;
   enabled?: DynamicValue<boolean>;

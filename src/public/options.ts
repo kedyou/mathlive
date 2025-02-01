@@ -1,6 +1,7 @@
-import type { Mathfield, Range } from './mathfield';
+import type { Mathfield, Offset, Range } from './mathfield';
 import type { Selector } from './commands';
 import type { ParseMode, MacroDictionary, Registers } from './core-types';
+import { InsertStyleHook } from './mathfield-element';
 
 /**
  * Specify behavior for origin validation.
@@ -225,6 +226,8 @@ export interface MathfieldHooks {
    */
   onInlineShortcut: (sender: Mathfield, symbol: string) => string;
 
+  onInsertStyle: InsertStyleHook | undefined | null;
+
   /**
    * A hook invoked when a scrolling the mathfield into view is necessary.
    *
@@ -284,7 +287,7 @@ export type ContentChangeOptions = {
 
 /** @category Options */
 export type KeyboardOptions = {
-  keybindings: readonly Keybinding[];
+  keybindings: Readonly<Keybinding[]>;
 };
 
 /** @category Options */
@@ -572,6 +575,13 @@ mf.macros = {
    * **Default**: `0`
    */
   minFontScale: number;
+
+  /**
+   * Sets the maximum number of columns for the matrix environment. The default is
+   * 10 columns to match the behavior of the amsmath matrix environment.
+   * **Default**: `10`
+   */
+  maxMatrixCols: number;
 };
 
 /**
@@ -661,7 +671,7 @@ export declare function setKeyboardLayout(
 export declare function setKeyboardLayoutLocale(locale: string): void;
 
 /** @category Static Rendering */
-export type StaticRenderOptions = {
+export type StaticRenderOptions = Partial<LayoutOptions> & {
   /**
    * An array of tag names whose content will not be scanned for delimiters
    * (unless their class matches the `processClass` pattern below).

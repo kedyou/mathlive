@@ -124,7 +124,7 @@ test('escape to enter/exit latex mode', async ({ page }) => {
 
   // use latex mode for math field with default settings
   await page.locator('#mf-1').press('Escape');
-  await page.locator('#mf-1').pressSequentially('frac');
+  await page.locator('#mf-1').pressSequentially('\\frac');
   await page.locator('#mf-1').press('Escape');
   // full fraction will be selected, navigate back to numerator
   await page.locator('#mf-1').press('ArrowLeft');
@@ -441,4 +441,52 @@ test('keyboard shortcuts with placeholders (#2291, #2293, #2294)', async ({
   expect(
     await page.locator('#mf-1').evaluate((e: MathfieldElement) => e.value)
   ).toBe(String.raw`\frac{f\cdot g}{a}\cdot x`);
+});
+
+test('keyboard cut and paste', async ({ page, browserName }) => {
+  test.skip(
+    browserName === 'webkit' && Boolean(process.env.CI),
+    'Keyboard paste does not work when headless on Linux (works when run with gui on Linux or headless/gui on MacOs)'
+  );
+
+  const modifierKey = /Mac|iPod|iPhone|iPad/.test(
+    await page.evaluate(() => navigator.platform)
+  )
+    ? 'Meta'
+    : 'Control';
+
+  let selectAllCommand = `${modifierKey}+a`;
+  if (modifierKey === 'Meta' && browserName === 'chromium') {
+    // Cmd-a not working with Chromium on Mac, need to use Control-A
+    // Cmd-a works correctly on Chrome and Edge on Mac
+    selectAllCommand = 'Control+a';
+  }
+
+  await page.goto('/dist/playwright-test-page/');
+
+  await page.locator('#mf-1').pressSequentially('30=r+t');
+
+  // check initial contents
+  expect(
+    await page.locator('#mf-1').evaluate((mfe: MathfieldElement) => mfe.value)
+  ).toBe('30=r+t');
+
+  // select all and cut
+  await page.locator('#mf-1').press(selectAllCommand);
+  await page.locator('#mf-1').press(`${modifierKey}+x`);
+
+  // should be empty after cut
+  expect(
+    await page.locator('#mf-1').evaluate((mfe: MathfieldElement) => mfe.value)
+  ).toBe('');
+
+  // paste contents back
+  await page.locator('#mf-1').press(`${modifierKey}+v`);
+
+  // initial contents should now be there
+  expect(
+    await page
+      .locator('#mf-1')
+      .evaluate((mfe: MathfieldElement) => mfe.value.trim())
+  ).toBe('30=r+t');
 });

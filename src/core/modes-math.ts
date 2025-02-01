@@ -1,12 +1,18 @@
 /* eslint-disable no-new */
 import { Atom } from './atom';
 import { joinLatex, latexCommand } from './tokenizer';
-import { getPropertyRuns, Mode } from './modes-utils';
+import {
+  getPropertyRuns,
+  Mode,
+  variantString,
+  weightString,
+} from './modes-utils';
 import type { Box } from './box';
 import type { Style, Variant, VariantStyle } from '../public/core-types';
 import { mathVariantToUnicode } from './unicode';
 import type { TokenDefinition } from 'latex-commands/types';
 import type { FontName, ToLatexOptions } from './types';
+import { addItalic } from '../editor-model/styling';
 
 // Each entry indicate the font-name (to be used to calculate font metrics)
 // and the CSS classes (for proper markup styling) for each possible
@@ -25,14 +31,14 @@ const VARIANTS: Record<string, [fontName: FontName, cssClass: string]> = {
 
   // Extended math symbols, arrows, etc.. at their standard Unicode codepoints
   'ams': ['AMS-Regular', 'ML__ams'],
-  'ams-bold': ['AMS-Regular', 'ML__ams'],
-  'ams-italic': ['AMS-Regular', 'ML__ams'],
-  'ams-bolditalic': ['AMS-Regular', 'ML__ams'],
+  'ams-bold': ['AMS-Regular', 'ML__ams ML__bold'],
+  'ams-italic': ['AMS-Regular', 'ML__ams ML__it'],
+  'ams-bolditalic': ['AMS-Regular', 'ML__ams ML__bold ML__it'],
 
   'sans-serif': ['SansSerif-Regular', 'ML__sans'],
   'sans-serif-bold': ['SansSerif-Regular', 'ML__sans ML__bold'],
-  'sans-serif-italic': ['SansSerif-Regular', 'ML__sans'],
-  'sans-serif-bolditalic': ['SansSerif-Regular', 'ML__sans'],
+  'sans-serif-italic': ['SansSerif-Regular', 'ML__sans ML__it'],
+  'sans-serif-bolditalic': ['SansSerif-Regular', 'ML__sans ML__bold ML__it'],
 
   'calligraphic': ['Caligraphic-Regular', 'ML__cal'],
   'calligraphic-bold': ['Caligraphic-Regular', 'ML__cal ML__bold'],
@@ -45,9 +51,9 @@ const VARIANTS: Record<string, [fontName: FontName, cssClass: string]> = {
   'script-bolditalic': ['Script-Regular', 'ML__script ML__bold ML__it'],
 
   'fraktur': ['Fraktur-Regular', 'ML__frak'],
-  'fraktur-bold': ['Fraktur-Regular', 'ML__frak'],
-  'fraktur-italic': ['Fraktur-Regular', 'ML__frak'],
-  'fraktur-bolditalic': ['Fraktur-Regular', 'ML__frak'],
+  'fraktur-bold': ['Fraktur-Regular', 'ML__frak ML__bold'],
+  'fraktur-italic': ['Fraktur-Regular', 'ML__frak ML__it'],
+  'fraktur-bolditalic': ['Fraktur-Regular', 'ML__frak ML__bold ML__it'],
 
   'monospace': ['Typewriter-Regular', 'ML__tt'],
   'monospace-bold': ['Typewriter-Regular', 'ML__tt ML__bold'],
@@ -56,9 +62,9 @@ const VARIANTS: Record<string, [fontName: FontName, cssClass: string]> = {
 
   // Blackboard characters are 'A-Z' in the AMS font
   'double-struck': ['AMS-Regular', 'ML__bb'],
-  'double-struck-bold': ['AMS-Regular', 'ML__bb'],
-  'double-struck-italic': ['AMS-Regular', 'ML__bb'],
-  'double-struck-bolditalic': ['AMS-Regular', 'ML__bb'],
+  'double-struck-bold': ['AMS-Regular', 'ML__bb ML__bold'],
+  'double-struck-italic': ['AMS-Regular', 'ML__bb ML_italic'],
+  'double-struck-bolditalic': ['AMS-Regular', 'ML__bb ML_bolditalic'],
 };
 
 export const VARIANT_REPERTOIRE = {
@@ -110,8 +116,14 @@ export class MathMode extends Mode {
       });
     }
 
-    const isFunction =
-      globalThis.MathfieldElement?.isFunction(info.command ?? command) ?? false;
+    let isFunction: boolean;
+    try {
+      isFunction =
+        globalThis.MathfieldElement?.isFunction(info.command ?? command) ??
+        false;
+    } catch (e) {
+      isFunction = false;
+    }
 
     if (info.definitionType === 'symbol') {
       const result = new Atom({
@@ -119,9 +131,9 @@ export class MathMode extends Mode {
         mode: 'math',
         command: info.command ?? command,
         value: String.fromCodePoint(info.codepoint),
+        isFunction,
         style,
       });
-      if (isFunction) result.isFunction = true;
 
       if (command.startsWith('\\')) result.verbatimLatex = command;
       return result;
@@ -131,16 +143,16 @@ export class MathMode extends Mode {
       mode: 'math',
       command: info.command ?? command,
       value: command,
+      isFunction,
       style,
     });
-    if (isFunction) result.isFunction = true;
     if (command.startsWith('\\')) result.verbatimLatex = command;
 
     return result;
   }
 
   serialize(run: Atom[], options: ToLatexOptions): string[] {
-    const result = emitVariantRun(run, { ...options, defaultMode: 'math' });
+    const result = emitBoldRun(run, { ...options, defaultMode: 'math' });
     if (result.length === 0 || options.defaultMode !== 'text') return result;
     return ['$ ', ...result, ' $'];
   }
@@ -187,16 +199,18 @@ export class MathMode extends Mode {
       variantStyle = 'italic';
     }
 
-    // 2. If no explicit variant style, auto-italicize some symbols,
-    // depending on the letterShapeStyle
+    // 2. Auto-italicize some symbols, depending on the letterShapeStyle
     if (variant === 'normal' && !variantStyle && box.value.length === 1) {
+      let italicize = false;
       LETTER_SHAPE_RANGES.forEach((x, i) => {
         if (
           x.test(box.value) &&
           LETTER_SHAPE_MODIFIER[style.letterShapeStyle ?? 'tex'][i] === 'it'
         )
-          variantStyle = 'italic';
+          italicize = true;
       });
+
+      if (italicize) variantStyle = addItalic(variantStyle);
     }
 
     // 3. Map the variant + variantStyle to a font
@@ -215,7 +229,20 @@ export class MathMode extends Mode {
       !VARIANT_REPERTOIRE[variant].test(box.value)
     ) {
       // Map to unicode character
-      box.value = mathVariantToUnicode(box.value, variant, variantStyle);
+      let v = mathVariantToUnicode(box.value, variant, variantStyle);
+      if (!v) {
+        // If we don't have an exact match, e.g. "bold blackboard d",
+        // try to find a match for the base character and add a class style
+        v = mathVariantToUnicode(box.value, variant) ?? box.value;
+
+        box.classes +=
+          {
+            'bold': ' ML__bold',
+            'italic': ' ML__it',
+            'bold-italic': ' ML__bold ML__it',
+          }[variantStyle ?? ''] ?? '';
+      }
+      box.value = v;
       // Return NULL to use default metrics
       return null;
     }
@@ -231,31 +258,68 @@ export class MathMode extends Mode {
   }
 }
 
-function emitVariantRun(run: Atom[], options: ToLatexOptions): string[] {
+function emitBoldRun(run: Atom[], options: ToLatexOptions): string[] {
+  return getPropertyRuns(run, 'bold').map((x) => {
+    const weight = weightString(x[0]);
+    if (weight !== 'bold') return joinLatex(emitVariantRun(x, options));
+
+    // If the parent is already bold, don't emit the bold command
+    if (weightString(x[0].parent!) === 'bold')
+      return joinLatex(emitVariantRun(x, options));
+
+    // Use '\mathbf' if possible, otherwise `\bm`. Note that `\bm` is
+    // not as well supported as `\mathbf` but it can handle more cases
+    // (i.e. greek letters, operators, variants, etc...)
+
+    // Get the content of the run
+    const value = joinLatex(x.map((x) => x.value ?? ''));
+    if (/^[a-zA-Z0-9]+$/.test(value)) {
+      return latexCommand('\\mathbf', joinLatex(emitVariantRun(x, options)));
+    }
+
+    // If the run contains a mix of characters, use `\bm`
+    return latexCommand('\\bm', joinLatex(emitVariantRun(x, options)));
+  });
+}
+
+function emitVariantRun(
+  run: Readonly<Atom[]>,
+  options: ToLatexOptions
+): string[] {
   const { parent } = run[0];
   const contextVariant = variantString(parent!);
   return getPropertyRuns(run, 'variant').map((x) => {
     const variant = variantString(x[0]);
     let command = '';
     if (variant && variant !== contextVariant) {
+      // Note that bold is handled separately, so we ignore it here.
       command = {
         'calligraphic': '\\mathcal',
+        'calligraphic-uo': '\\mathcal',
         'fraktur': '\\mathfrak',
+        'fraktur-uo': '\\mathfrak',
         'double-struck': '\\mathbb',
+        'double-struck-uo': '\\mathbb',
         'script': '\\mathscr',
+        'script-uo': '\\mathscr',
         'monospace': '\\mathtt',
+        'monospace-uo': '\\mathtt',
         'sans-serif': '\\mathsf',
-        'normal': '\\mathrm',
+        'sans-serif-uo': '\\mathsf',
+        'normal': '',
+        'normal-up': '\\mathrm',
         'normal-italic': '\\mathnormal',
-        'normal-bold': '\\mathbf',
+        'normal-bold': '',
         'normal-bolditalic': '\\mathbfit',
         'ams': '',
+        'ams-up': '\\mathrm',
         'ams-italic': '\\mathit',
-        'ams-bold': '\\mathbf',
+        'ams-bold': '',
         'ams-bolditalic': '\\mathbfit',
         'main': '',
+        'main-up': '\\mathrm',
         'main-italic': '\\mathit',
-        'main-bold': '\\mathbf',
+        'main-bold': '',
         'main-bolditalic': '\\mathbfit',
         // There are a few rare font families possible, which
         // are not supported:
@@ -269,28 +333,6 @@ function emitVariantRun(run: Atom[], options: ToLatexOptions): string[] {
     const arg = joinLatex(x.map((x) => x._serialize(options)));
     return !command ? arg : latexCommand(command, arg);
   });
-}
-
-function variantString(atom: Atom): string {
-  if (!atom) return '';
-  const { style } = atom;
-  if (style.variant === undefined) return '';
-  let result = style.variant;
-  if (
-    ![
-      'calligraphic',
-      'fraktur',
-      'double-struck',
-      'script',
-      'monospace',
-      'sans-serif',
-    ].includes(style.variant) &&
-    style.variantStyle &&
-    style.variantStyle !== 'up'
-  )
-    result += '-' + style.variantStyle;
-
-  return result;
 }
 
 // Singleton class

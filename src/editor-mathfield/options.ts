@@ -13,6 +13,7 @@ import { defaultExportHook } from './mode-editor';
 import { INLINE_SHORTCUTS } from '../editor/shortcuts-definitions';
 import { DEFAULT_KEYBINDINGS } from '../editor/keybindings-definitions';
 import { VirtualKeyboard } from '../virtual-keyboard/global';
+import { defaultInsertStyleHook } from './styling';
 
 /** @internal */
 export type _MathfieldOptions = MathfieldOptions & {
@@ -140,6 +141,7 @@ export function getDefault(): Required<_MathfieldOptions> {
     backgroundColorMap: defaultBackgroundColorMap,
     letterShapeStyle: l10n.locale.startsWith('fr') ? 'french' : 'tex',
     minFontScale: 0,
+    maxMatrixCols: 10,
 
     smartMode: false,
     smartFence: true,
@@ -202,6 +204,7 @@ export function getDefault(): Required<_MathfieldOptions> {
     virtualKeyboardTargetOrigin: window?.origin,
     originValidator: 'none',
 
+    onInsertStyle: defaultInsertStyleHook,
     onInlineShortcut: () => '',
     onScrollIntoView: null,
     onExport: defaultExportHook,

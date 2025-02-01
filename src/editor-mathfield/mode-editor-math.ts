@@ -157,7 +157,7 @@ export class MathModeEditor extends ModeEditor {
 
     //
     // 4/ If that didn't work, try some plain text
-    // (could be LaTeX, could be ASIIMath)
+    // (could be LaTeX, could be ASCIIMath)
     //
     if (!text)
       text = typeof data === 'string' ? data : data.getData('text/plain');
@@ -181,15 +181,17 @@ export class MathModeEditor extends ModeEditor {
   }
 
   insert(model: _Model, input: string, options: InsertOptions): boolean {
-    const data =
+    let data =
       typeof input === 'string'
         ? input
         : globalThis.MathfieldElement.computeEngine?.box(input).latex ?? '';
+
     if (
       !options.silenceNotifications &&
       !model.contentWillChange({ data, inputType: 'insertText' })
     )
       return false;
+
     if (!options.insertionMode) options.insertionMode = 'replaceSelection';
     if (!options.selectionMode) options.selectionMode = 'placeholder';
     if (!options.format) options.format = 'auto';
@@ -218,10 +220,7 @@ export class MathModeEditor extends ModeEditor {
     //
     // Delete any selected items
     //
-    if (
-      options.insertionMode === 'replaceSelection' &&
-      !model.selectionIsCollapsed
-    )
+    if (options.insertionMode === 'replaceSelection')
       model.deleteAtoms(range(model.selection));
     else if (options.insertionMode === 'replaceAll') model.deleteAtoms();
     else if (options.insertionMode === 'insertBefore')
@@ -423,9 +422,9 @@ function convertStringToAtoms(
   s: string | Expression,
   args: (arg: string) => string,
   options: InsertOptions
-): [OutputFormat, readonly Atom[]] {
+): [OutputFormat, Readonly<Atom[]>] {
   let format: OutputFormat | undefined = undefined;
-  let result: readonly Atom[] = [];
+  let result: Readonly<Atom[]> = [];
 
   if (typeof s !== 'string' || options.format === 'math-json') {
     const ce = globalThis.MathfieldElement.computeEngine;
@@ -596,7 +595,7 @@ function isImplicitArg(atom: Atom): boolean {
     /^(mord|surd|subsup|leftright|mop|mclose)$/.test(atom.type)
   ) {
     // Exclude `\int`, \`sum`, etc...
-    if (atom.isExtensibleSymbol) return false;
+    if (atom.type === 'extensible-symbol') return false;
 
     return true;
   }

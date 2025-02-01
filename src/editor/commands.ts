@@ -64,11 +64,6 @@ function getCommandInfo(
     selector = command[0];
   } else selector = command;
 
-  // Convert kebab case (like-this) to camel case (likeThis).
-  selector = selector.replace(/-\w/g, (m) =>
-    m[1].toUpperCase()
-  ) as SelectorPrivate;
-
   return COMMANDS[selector];
 }
 
@@ -80,8 +75,10 @@ export function getCommandTarget(
 
 export function perform(
   mathfield: _Mathfield,
-  command: SelectorPrivate | [SelectorPrivate, ...any[]]
+  command: SelectorPrivate | [SelectorPrivate, ...any[]] | undefined
 ): boolean {
+  command = parseCommand(command);
+
   if (!command) return false;
 
   let selector: SelectorPrivate;
@@ -93,11 +90,6 @@ export function perform(
     selector = command[0];
     args = command.slice(1);
   } else selector = command;
-
-  // Convert kebab case (like-this) to camel case (likeThis).
-  selector = selector.replace(/-\w/g, (m) =>
-    m[1].toUpperCase()
-  ) as SelectorPrivate;
 
   const info = COMMANDS[selector];
   const commandTarget = info?.target;
@@ -124,7 +116,7 @@ export function perform(
     dirty = true;
     handled = true;
   } else if (commandTarget === 'virtual-keyboard') {
-    dirty = window.mathVirtualKeyboard.executeCommand(command) ?? false;
+    dirty = window.mathVirtualKeyboard?.executeCommand(command) ?? false;
     handled = true;
   } else if (COMMANDS[selector]) {
     if (!mathfield.isSelectionEditable && info?.changeContent) {
@@ -144,7 +136,7 @@ export function perform(
     // the user style
     if (
       !mathfield.model.selectionIsCollapsed ||
-      (info?.changeSelection && command !== 'deleteBackward')
+      (info?.changeSelection && selector !== 'deleteBackward')
     ) {
       mathfield.flushInlineShortcutBuffer();
       if (!info?.changeContent) mathfield.stopCoalescingUndo();
@@ -215,6 +207,19 @@ register(
 );
 
 register(
+  {
+    dispatchEvent: (
+      mathfield: _Mathfield,
+      event: string,
+      detail: number
+    ): boolean =>
+      mathfield.host?.dispatchEvent(new CustomEvent(event, { detail })) ??
+      false,
+  },
+  { target: 'mathfield' }
+);
+
+register(
   { nextSuggestion, previousSuggestion },
   {
     target: 'mathfield',
@@ -222,3 +227,61 @@ register(
     changeSelection: true,
   }
 );
+
+/**
+ * A command can be a string or an array of strings.
+ * - string: `selector(arg1, arg2)`
+ * - array: `['selector', arg1, arg2]`
+ *
+ * In both cases, the selector can be in kebab or camel case.
+ *
+ */
+export function parseCommand(
+  command: undefined | string | [string, ...any[]]
+): [SelectorPrivate, ...any[]] | SelectorPrivate | undefined {
+  if (!command) return undefined;
+  if (isArray(command) && command.length > 0) {
+    let selector = command[0];
+    // Convert kebab case (like-this) to camel case (likeThis).
+    selector.replace(/-\w/g, (m) => m[1].toUpperCase());
+    if (selector === 'performWithFeedback' && command.length === 2) {
+      return [selector, parseCommand(command[1])];
+    }
+    return [selector as SelectorPrivate, ...command.slice(1)];
+  }
+
+  // Is it a string of the form `selector(arg1, arg2)`?
+  if (typeof command !== 'string') return undefined;
+
+  const match = command.trim().match(/^([a-zA-Z0-9-]+)\((.*)\)$/);
+  if (match) {
+    const selector = match[1];
+    selector.replace(/-\w/g, (m) => m[1].toUpperCase());
+    let args = match[2].split(',').map((x) => x.trim());
+    return [
+      selector as SelectorPrivate,
+      ...args.map((arg) => {
+        if (/"[^"]*"/.test(arg)) return arg.slice(1, -1);
+        if (/'[^']*'/.test(arg)) return arg.slice(1, -1);
+        if (/^true$/.test(arg)) return true;
+        if (/^false$/.test(arg)) return false;
+        if (/^[-]?\d+$/.test(arg)) return parseInt(arg, 10);
+        // Is it an object literal?
+        if (/^\{.*\}$/.test(arg)) {
+          try {
+            return JSON.parse(arg);
+          } catch (e) {
+            console.error('Invalid argument:', arg);
+            return arg;
+          }
+        }
+        return parseCommand(arg);
+      }),
+    ];
+  }
+
+  let selector = command;
+  selector.replace(/-\w/g, (m) => m[1].toUpperCase());
+
+  return selector as SelectorPrivate;
+}

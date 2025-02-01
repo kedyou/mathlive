@@ -39,6 +39,8 @@ import '../virtual-keyboard/global';
 import type { ModelState, GetAtomOptions, AnnounceVerb } from './types';
 import type { BranchName, ToLatexOptions } from 'core/types';
 
+import { isValidMathfield } from '../editor-mathfield/utils';
+
 /** @internal */
 export class _Model implements Model {
   readonly mathfield: _Mathfield;
@@ -105,11 +107,12 @@ export class _Model implements Model {
       this.selection = state.selection;
       this.silenceNotifications = didSuppress;
       this.contentDidChange(changeOption);
+      this.selectionDidChange();
     }
     this.silenceNotifications = wasSuppressing;
   }
 
-  get atoms(): readonly Atom[] {
+  get atoms(): Readonly<Atom[]> {
     return this.root.children;
   }
 
@@ -120,17 +123,19 @@ export class _Model implements Model {
     return this._selection;
   }
 
-  set selection(value: Selection) {
+  set selection(value: Selection | Range) {
     this.setSelection(value);
   }
 
   setSelection(from: Offset, to: Offset): boolean;
-  setSelection(range: Range): boolean;
-  setSelection(selection: Selection): boolean;
+  setSelection(range: Range | Selection): boolean;
   setSelection(arg1: Offset | Range | Selection, arg2?: Offset): boolean {
     if (!this.mathfield.contentEditable && this.mathfield.userSelect === 'none')
       return false;
-    return this.deferNotifications({ selection: true }, () => {
+    // Note: a side effect of changing the selection may be to change the
+    // content: for example when exiting LaTeX mode, so dispatch the
+    // content change as well
+    return this.deferNotifications({ selection: true, content: true }, () => {
       //
       // 1/ Normalize the input
       // (account for offset < 0, etc...)
@@ -320,18 +325,18 @@ export class _Model implements Model {
    * Note that an atom with children is included in the result only if
    * all its children are in range.
    */
-  getAtoms(arg: Selection, options?: GetAtomOptions): readonly Atom[];
-  getAtoms(arg: Range, options?: GetAtomOptions): readonly Atom[];
+  getAtoms(arg: Selection, options?: GetAtomOptions): Readonly<Atom[]>;
+  getAtoms(arg: Range, options?: GetAtomOptions): Readonly<Atom[]>;
   getAtoms(
     from: Offset,
     to?: Offset,
     options?: GetAtomOptions
-  ): readonly Atom[];
+  ): Readonly<Atom[]>;
   getAtoms(
     arg1: Selection | Range | Offset,
     arg2?: Offset | GetAtomOptions,
     arg3?: GetAtomOptions
-  ): readonly Atom[] {
+  ): Readonly<Atom[]> {
     let options = arg3 ?? {};
     if (isSelection(arg1)) {
       options = (arg2 as GetAtomOptions) ?? {};
@@ -397,7 +402,7 @@ export class _Model implements Model {
    * Return all the atoms, in order, starting at startingIndex
    * then looping back at the beginning
    */
-  getAllAtoms(startingIndex = 0): readonly Atom[] {
+  getAllAtoms(startingIndex = 0): Readonly<Atom[]> {
     const result: Atom[] = [];
     const last = this.lastOffset;
     for (let i = startingIndex; i <= last; i++) result.push(this.atoms[i]);
@@ -509,6 +514,8 @@ export class _Model implements Model {
       // This.config.atomIdsSettings = savedAtomIdsSettings;      // @revisit
       return result;
     }
+
+    if (format === 'plain-text') return atomToAsciiMath(atom, { plain: true });
 
     if (format === 'ascii-math') return atomToAsciiMath(atom);
 
@@ -672,9 +679,9 @@ export class _Model implements Model {
   announce(
     command: AnnounceVerb,
     previousPosition?: number,
-    atoms: readonly Atom[] = []
+    atoms: Readonly<Atom[]> = []
   ): void {
-    const result =
+    const success =
       this.mathfield.host?.dispatchEvent(
         new CustomEvent('announce', {
           detail: { command, previousPosition, atoms },
@@ -683,7 +690,7 @@ export class _Model implements Model {
           composed: true,
         })
       ) ?? true;
-    if (result)
+    if (success)
       defaultAnnounceHook(this.mathfield, command, previousPosition, atoms);
   }
 
@@ -708,20 +715,21 @@ export class _Model implements Model {
 
     f();
 
-    const contentChanged = this.root.changeCounter !== previousCounter;
+    this.silenceNotifications = saved;
+
+    // If the selection has effectively changed, notify
+    // Dispatch selectionChanged first, as it may affect the content
+    // for example when exiting LaTeX mode.
     const selectionChanged =
       oldAnchor !== this._anchor ||
       oldPosition !== this._position ||
       compareSelection(this._selection, oldSelection) === 'different';
-
-    this.silenceNotifications = saved;
+    if (options.selection && selectionChanged) this.selectionDidChange();
 
     // Notify of content change, if requested
+    const contentChanged = this.root.changeCounter !== previousCounter;
     if (options.content && contentChanged)
       this.contentDidChange({ inputType: options.type });
-
-    // If the selection has effectively changed, notify
-    if (options.selection && selectionChanged) this.selectionDidChange();
 
     return contentChanged || selectionChanged;
   }
@@ -829,17 +837,32 @@ export class _Model implements Model {
     const save = this.silenceNotifications;
     this.silenceNotifications = true;
 
-    this.mathfield.host.dispatchEvent(
-      new InputEvent('input', {
-        ...options,
-        // To work around a bug in WebKit/Safari (the inputType property gets stripped), include the inputType as the 'data' property. (see #1843)
-        data: options.data ? options.data : options.inputType ?? '',
-        bubbles: true,
-        composed: true,
-      } as InputEventInit)
-    );
+    // In a textarea field, the 'input' event is fired after the keydown
+    // event. However, in our case we're inside the 'keydown' event handler
+    // so we need to 'defer' the 'input' event to the next event loop
+    // iteration.
+
+    setTimeout(() => {
+      if (
+        !this.mathfield ||
+        !isValidMathfield(this.mathfield) ||
+        !this.mathfield.host
+      )
+        return;
+
+      this.mathfield.host.dispatchEvent(
+        new InputEvent('input', {
+          ...options,
+          // To work around a bug in WebKit/Safari (the inputType property gets stripped), include the inputType as the 'data' property. (see #1843)
+          data: options.data ? options.data : options.inputType ?? '',
+          bubbles: true,
+          composed: true,
+        } as InputEventInit)
+      );
+    }, 0);
     this.silenceNotifications = save;
   }
+
   selectionDidChange(): void {
     // The mathfield could be undefined if the mathfield was disposed
     // while the selection was changing

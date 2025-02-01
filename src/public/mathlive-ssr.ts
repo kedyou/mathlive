@@ -30,6 +30,12 @@ import type { LatexSyntaxError, ParseMode } from './core-types';
 import '../core/modes';
 import { getDefaultContext } from '../core/context-utils';
 import { applyInterBoxSpacing } from '../core/inter-box-spacing';
+import { LayoutOptions } from './options';
+import { ContextInterface } from 'core/types';
+import {
+  getMacroDefinition,
+  normalizeMacroDictionary,
+} from '../latex-commands/definitions';
 
 /**
  * Convert a LaTeX string to a string of HTML markup.
@@ -67,40 +73,40 @@ import { applyInterBoxSpacing } from '../core/inter-box-spacing';
  */
 export function convertLatexToMarkup(
   text: string,
-  options?: {
-    mathstyle?: 'displaystyle' | 'textstyle';
-    letterShapeStyle?: 'tex' | 'french' | 'iso' | 'upright';
-    context?: unknown /* ContextInterface */;
-  }
+  options?: Partial<LayoutOptions>
 ): string {
-  options ??= {};
-  options.mathstyle = options.mathstyle ?? 'displaystyle';
-  let { mathstyle, letterShapeStyle, context } = options ?? {};
-  mathstyle = mathstyle ?? 'displaystyle';
-  letterShapeStyle = letterShapeStyle ?? 'tex';
-  context ??= {};
+  const from: ContextInterface = {
+    ...getDefaultContext(),
+    renderPlaceholder: () => new Box(0xa0, { maxFontSize: 1.0 }),
+  };
+  if (options?.letterShapeStyle && options?.letterShapeStyle !== 'auto')
+    from.letterShapeStyle = options.letterShapeStyle;
 
-  const effectiveContext = new Context({
-    from: {
-      ...getDefaultContext(),
-      renderPlaceholder: () => new Box(0xa0, { maxFontSize: 1.0 }),
-      letterShapeStyle,
-      ...(context as any),
-    },
-    mathstyle,
-  });
+  if (options?.macros) {
+    const macros = normalizeMacroDictionary(options?.macros);
+    from.getMacro = (token) => getMacroDefinition(token, macros);
+  }
+  if (options?.registers)
+    from.registers = { ...from.registers, ...options.registers };
+
+  const defaultMode = options?.defaultMode ?? 'math';
+  let parseMode: ParseMode = 'math';
+  let mathstyle: 'displaystyle' | 'textstyle' = 'displaystyle';
+  if (defaultMode === 'inline-math') mathstyle = 'textstyle';
+  else if (defaultMode === 'math') mathstyle = 'displaystyle';
+  else if (defaultMode === 'text') {
+    mathstyle = 'textstyle';
+    parseMode = 'text';
+  }
+  const effectiveContext = new Context({ from });
 
   //
   // 1. Parse the formula and return a tree of atoms, e.g. 'genfrac'.
   //
   const root = new Atom({
-    mode: 'math',
     type: 'root',
-    body: parseLatex(text, {
-      context: effectiveContext,
-      parseMode: 'math',
-      mathstyle,
-    }),
+    mode: parseMode,
+    body: parseLatex(text, { context: effectiveContext, parseMode, mathstyle }),
   });
 
   //

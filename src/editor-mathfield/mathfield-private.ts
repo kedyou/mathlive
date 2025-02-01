@@ -53,6 +53,7 @@ import {
   SelectorPrivate,
   perform,
   getCommandTarget,
+  parseCommand,
 } from '../editor/commands';
 import {
   _MathfieldOptions,
@@ -76,12 +77,14 @@ import {
   render,
   renderSelection,
   contentMarkup,
+  reparse,
 } from './render';
 
 import './commands';
 import './styling';
 import {
   getCaretPoint,
+  getElementInfo,
   getSelectionBounds,
   isValidMathfield,
   Rect,
@@ -95,11 +98,10 @@ import {
 } from './pointer-input';
 
 import { ModeEditor } from './mode-editor';
-import { getLatexGroupBody } from './mode-editor-latex';
 import './mode-editor-math';
 import './mode-editor-text';
 
-import { validateStyle } from './styling';
+import { computeInsertStyle, validateStyle } from './styling';
 import { disposeKeystrokeCaption } from './keystroke-caption';
 import { PromptAtom } from '../atoms/prompt';
 import { isVirtualKeyboardMessage } from '../virtual-keyboard/proxy';
@@ -123,7 +125,7 @@ import {
 } from 'editor/environment-popover';
 import { Menu } from 'ui/menu/menu';
 import { onContextMenu } from 'ui/menu/context-menu';
-import { keyboardModifiersFromEvent } from 'ui/events/utils';
+import { keyboardModifiersFromEvent } from '../ui/events/utils';
 import { getDefaultMenuItems } from 'editor/default-menu';
 import type { ModelState } from 'editor-model/types';
 import { _Model } from 'editor-model/model-private';
@@ -133,6 +135,11 @@ import 'editor-model/commands-delete';
 import 'editor-model/commands-move';
 import 'editor-model/commands-select';
 import { KeyboardModifiers } from 'public/ui-events-types';
+import MathfieldElement from '../public/mathfield-element';
+import { parseMathString } from 'formats/parse-math-string';
+import { TextAtom } from 'atoms/text';
+import { getLatexGroup } from './mode-editor-latex';
+import { MenuItem } from 'public/ui-menu-types';
 
 export const DEFAULT_KEYBOARD_TOGGLE_GLYPH = `<svg xmlns="http://www.w3.org/2000/svg" style="width: 21px;"  viewBox="0 0 576 512" role="img" aria-label="${localize(
   'tooltip.toggle virtual keyboard'
@@ -152,10 +159,10 @@ export class _Mathfield implements Mathfield, KeyboardDelegateInterface {
 
   // When inserting new characters, if not `"none"`, adopt the style
   // (color, up variant, etc..) from the previous or following atom.
-  adoptStyle: 'left' | 'right' | 'none';
+  styleBias: 'left' | 'right' | 'none';
 
-  // The style used when `adoptStyle` is set to 'none'
-  private _defaultStyle: Style;
+  // The style used when `styleBias` is set to 'none'
+  defaultStyle: Readonly<Style>;
 
   dirty: boolean; // If true, need to be redrawn
 
@@ -176,7 +183,7 @@ export class _Mathfield implements Mathfield, KeyboardDelegateInterface {
 
   readonly keyboardDelegate: Readonly<KeyboardDelegate>;
 
-  _keybindings?: readonly Keybinding[]; // Normalized keybindings (raw ones in config)
+  _keybindings?: Readonly<Keybinding[]>; // Normalized keybindings (raw ones in config)
   keyboardLayout: KeyboardLayoutName;
 
   inlineShortcutBuffer: {
@@ -204,7 +211,10 @@ export class _Mathfield implements Mathfield, KeyboardDelegateInterface {
   private connectedToVirtualKeyboard: boolean;
 
   private eventController: AbortController;
-  private resizeObserver: ResizeObserver;
+  resizeObserver: ResizeObserver;
+  // ResizeObserver, sadly, fire at least once, even if no size has changed.
+  // Workaround this by tracking its state. See https://github.com/WICG/resize-observer/issues/38#issuecomment-532833484
+  resizeObserverStarted: boolean;
 
   /**
    *
@@ -256,10 +266,12 @@ export class _Mathfield implements Mathfield, KeyboardDelegateInterface {
       typeof setTimeout
     >;
 
-    // Current style (color, weight, italic, etc...):
-    // reflects the style to be applied on next insertion.
+    // Default style (color, weight, italic, etc...):
+    // reflects the style to be applied on next insertion
+    // if styleBias is "none".
     this.defaultStyle = {};
-    this.adoptStyle = 'left';
+    // Adopt the style of the left sibling by default
+    this.styleBias = 'left';
 
     if (this.options.defaultMode === 'inline-math')
       this.element.classList.add('ML__is-inline');
@@ -395,8 +407,6 @@ If you are using Vue, this may be because you are using the runtime-only build o
         { signal }
       );
 
-    this._menu = new Menu(getDefaultMenuItems(this), { host: this.host });
-
     // Listen for contextmenu events on the field
     this.field.addEventListener('contextmenu', this, { signal });
 
@@ -406,11 +416,12 @@ If you are using Vue, this may be because you are using the runtime-only build o
       'pointerdown',
       (ev) => {
         if (ev.currentTarget !== menuToggle) return;
-        if (this._menu.state !== 'closed') return;
+        const menu = this.menu;
+        if (menu.state !== 'closed') return;
         this.element!.classList.add('tracking');
         const bounds = menuToggle.getBoundingClientRect();
-        this._menu.modifiers = keyboardModifiersFromEvent(ev);
-        this._menu.show({
+        menu.modifiers = keyboardModifiersFromEvent(ev);
+        menu.show({
           target: menuToggle,
           location: { x: bounds.left, y: bounds.bottom },
           onDismiss: () => this.element!.classList.remove('tracking'),
@@ -445,7 +456,14 @@ If you are using Vue, this may be because you are using the runtime-only build o
     // to adjust the UI (popover, etc...)
     window.addEventListener('resize', this, { signal });
     document.addEventListener('scroll', this, { signal });
-    this.resizeObserver = new ResizeObserver(() => requestUpdate(this));
+    this.resizeObserver = new ResizeObserver((entries) => {
+      if (this.resizeObserverStarted) {
+        this.resizeObserverStarted = false;
+        return;
+      }
+      requestUpdate(this);
+    });
+    this.resizeObserverStarted = true;
     this.resizeObserver.observe(this.field);
 
     window.mathVirtualKeyboard.addEventListener(
@@ -474,37 +492,10 @@ If you are using Vue, this may be because you are using the runtime-only build o
     // Snapshot as 'set-value' operation, so that any other subsequent
     // `setValue()` gets coalesced
     this.undoManager.snapshot('set-value');
-  }
 
-  get defaultStyle(): Readonly<Style> {
-    return this._defaultStyle;
-  }
-
-  set defaultStyle(value: Style) {
-    // console.log('set style', value);
-    this._defaultStyle = value;
-  }
-
-  /** Depending on the value of `adoptStyle` return the style of the
-   * sibling or the default style.
-   *
-   * This style is the one that will be applied to the next inserted atom.
-   *
-   */
-  get effectiveStyle(): Readonly<Style> {
-    if (this.adoptStyle === 'none') return this.defaultStyle;
-
-    const atom = this.model.at(this.model.position);
-    const sibling = this.adoptStyle === 'right' ? atom.rightSibling : atom;
-    if (!sibling) return this.defaultStyle;
-    if (sibling.type === 'group') {
-      const branch = sibling.branch('body');
-      if (!branch || branch.length < 2) return {};
-      if (this.adoptStyle === 'right') return branch[1].computedStyle;
-      return branch[branch.length - 1].computedStyle;
-    }
-
-    return sibling.computedStyle;
+    // Request an update (this is necessary in the case where the mathfield
+    // is empty but does have a contentPlaceholder)
+    requestUpdate(this);
   }
 
   connectToVirtualKeyboard(): void {
@@ -628,20 +619,8 @@ If you are using Vue, this may be because you are using the runtime-only build o
     return this.options.minFontScale;
   }
 
-  /** Returns styles shared by all selected atoms */
-  get selectionStyle(): Readonly<Style> {
-    if (this.model.selectionIsCollapsed) return this.effectiveStyle;
-
-    // Potentially multiple atoms selected, return the COMMON styles
-    const selectedAtoms = this.model.getAtoms(this.model.selection);
-    if (selectedAtoms.length === 0) return {};
-    const style = { ...selectedAtoms[0].style };
-    for (const atom of selectedAtoms) {
-      for (const [key, value] of Object.entries(atom.style))
-        if (style[key] !== value) delete style[key];
-    }
-
-    return style;
+  get maxMatrixCols(): number {
+    return this.options.maxMatrixCols;
   }
 
   /**
@@ -673,8 +652,8 @@ If you are using Vue, this may be because you are using the runtime-only build o
     const value = style[prop];
 
     if (this.model.selectionIsCollapsed) {
-      if (this.effectiveStyle[prop] === value) return 'all';
-      return 'none';
+      const style = computeInsertStyle(this);
+      return style[prop] === value ? 'all' : 'none';
     }
 
     const atoms = this.model.getAtoms(this.model.selection, {
@@ -696,7 +675,7 @@ If you are using Vue, this may be because you are using the runtime-only build o
     return 'some';
   }
 
-  get keybindings(): readonly Keybinding[] {
+  get keybindings(): Readonly<Keybinding[]> {
     if (this._keybindings) return this._keybindings;
 
     const [keybindings, errors] = normalizeKeybindings(
@@ -718,7 +697,13 @@ If you are using Vue, this may be because you are using the runtime-only build o
   }
 
   get menu(): Menu {
+    this._menu ??= new Menu(getDefaultMenuItems(this), { host: this.host });
     return this._menu;
+  }
+
+  set menuItems(menuItems: Readonly<MenuItem[]>) {
+    if (this._menu) this._menu.menuItems = menuItems;
+    else this._menu = new Menu(menuItems, { host: this.host });
   }
 
   setOptions(config: Partial<_MathfieldOptions>): void {
@@ -747,27 +732,18 @@ If you are using Vue, this may be because you are using the runtime-only build o
       expandMacro: false,
       defaultMode: this.options.defaultMode,
     });
-    if ('macros' in config || this.model.getValue() !== content) {
-      const selection = this.model.selection;
-      ModeEditor.insert(this.model, content, {
-        insertionMode: 'replaceAll',
-        selectionMode: 'after',
-        format: 'latex',
-        silenceNotifications: true,
-        mode: 'math',
-      });
-      this.model.selection = selection;
-    }
+    if ('macros' in config || this.model.getValue() !== content) reparse(this);
 
     if (
       'value' in config ||
-      'macros' in config ||
       'registers' in config ||
       'colorMap' in config ||
       'backgroundColorMap' in config ||
       'letterShapeStyle' in config ||
       'minFontScale' in config ||
+      'maxMatrixCols' in config ||
       'readOnly' in config ||
+      'placeholderContent' in config ||
       'placeholderSymbol' in config
     )
       requestUpdate(this);
@@ -809,7 +785,8 @@ If you are using Vue, this may be because you are using the runtime-only build o
       const { action } = evt.data;
 
       if (action === 'execute-command') {
-        const command = evt.data.command!;
+        const command = parseCommand(evt.data.command);
+        if (!command) return;
         if (getCommandTarget(command) === 'virtual-keyboard') return;
         this.executeCommand(command);
       } else if (action === 'update-state') {
@@ -835,7 +812,7 @@ If you are using Vue, this may be because you are using the runtime-only build o
         break;
 
       case 'pointerdown':
-        if (this.userSelect !== 'none') {
+        if (!evt.defaultPrevented && this.userSelect !== 'none') {
           onPointerDown(this, evt as PointerEvent);
           // Firefox convention: holding the shift key disables custom context menu
           if ((evt as PointerEvent).shiftKey === false) {
@@ -843,7 +820,7 @@ If you are using Vue, this may be because you are using the runtime-only build o
               await onContextMenu(
                 evt,
                 this.element!.querySelector<HTMLElement>('[part=container]')!,
-                this._menu
+                this.menu
               )
             )
               PointerTracker.stop();
@@ -860,7 +837,7 @@ If you are using Vue, this may be because you are using the runtime-only build o
             await onContextMenu(
               evt,
               this.element!.querySelector<HTMLElement>('[part=container]')!,
-              this._menu
+              this.menu
             )
           )
             PointerTracker.stop();
@@ -971,7 +948,7 @@ If you are using Vue, this may be because you are using the runtime-only build o
     return perform(this, command);
   }
 
-  get errors(): readonly LatexSyntaxError[] {
+  get errors(): Readonly<LatexSyntaxError[]> {
     return validateLatex(this.model.getValue(), { context: this.context });
   }
 
@@ -1153,7 +1130,7 @@ If you are using Vue, this may be because you are using the runtime-only build o
     else {
       if (this.model.selectionIsCollapsed) {
         ModeEditor.insert(this.model, s, {
-          style: this.model.at(this.model.position).computedStyle,
+          style: this.model.at(this.model.position).style,
           ...options,
         });
       } else ModeEditor.insert(this.model, s, options);
@@ -1167,6 +1144,12 @@ If you are using Vue, this may be because you are using the runtime-only build o
     return true;
   }
 
+  /**
+   * Switch from the current mode to the new mode, if different.
+   * Prefix and suffix are optional strings to be inserted before and after
+   * the mode change, so prefix is interpreted with the current mode and
+   * suffix with the new mode.
+   */
   switchMode(mode: ParseMode, prefix = '', suffix = ''): void {
     if (
       this.model.mode === mode ||
@@ -1176,13 +1159,18 @@ If you are using Vue, this may be because you are using the runtime-only build o
     )
       return;
 
-    // Dispatch event with option of canceling
-    // Set the mode to the requested mode so the event handler
-    // can inspect it.
-    const previousMode = this.model.mode;
-    this.model.mode = mode;
+    const { model } = this;
+
+    //
+    // 1. Confirm that the mode change is allowed
+    //
+    // Dispatch event with the option of canceling.
+    // Set the mode to the requested mode so the event handler can inspect it.
+    const previousMode = model.mode;
+    model.mode = mode;
     if (
-      !this.host?.dispatchEvent(
+      this.host &&
+      !this.host.dispatchEvent(
         new Event('mode-change', {
           bubbles: true,
           composed: true,
@@ -1190,91 +1178,111 @@ If you are using Vue, this may be because you are using the runtime-only build o
         })
       )
     ) {
-      this.model.mode = previousMode;
+      model.mode = previousMode;
       return;
     }
 
-    // Notify of mode change
-    const currentMode = this.model.mode;
-    const { model } = this;
+    // Restore to the current mode
+    model.mode = previousMode;
+
+    //
+    // 2. Perform the mode change, accounting for selection and prefix/suffix
+    //
     model.deferNotifications(
       {
         content: Boolean(suffix) || Boolean(prefix),
-        selection: true,
+        selection: true, // Boolean(suffix) || Boolean(prefix),
         type: 'insertText',
       },
       (): boolean => {
-        let contentChanged = false;
-        this.flushInlineShortcutBuffer();
-        this.stopCoalescingUndo();
-        if (prefix && mode !== 'latex') {
-          const atoms = parseLatex(prefix, {
-            context: this.context,
-            parseMode: mode,
-          });
-          model.collapseSelection('forward');
-          const cursor = model.at(model.position);
-          model.position = model.offsetOf(
-            cursor.parent!.addChildrenAfter(atoms, cursor)
-          );
-          contentChanged = true;
-        }
+        let cursor = model.at(model.position);
 
-        this.model.mode = mode;
+        const insertString = (s: string, options: { select: boolean }) => {
+          if (!s) return;
+          const atoms =
+            model.mode === 'math'
+              ? parseLatex(parseMathString(s, { format: 'ascii-math' })[1], {
+                  context: this.context,
+                })
+              : [...s].map((c) => new TextAtom(c, c, {}));
 
-        if (mode === 'latex') {
-          let wasCollapsed = model.selectionIsCollapsed;
-          // We can have only a single latex group at a time.
-          // If a latex group is open, close it first
-          complete(this, 'accept');
-
-          // Insert a latex group atom
-          let latex: string;
-          let cursor = model.at(model.position);
-          if (wasCollapsed) latex = '\\';
-          else {
-            const selRange = range(model.selection);
-            latex = this.model.getValue(selRange, 'latex');
-            const extractedAtoms = this.model.extractAtoms(selRange);
-            if (
-              extractedAtoms.length === 1 &&
-              extractedAtoms[0].type === 'placeholder'
-            ) {
-              // If we just had a placeholder selected, pretend we had an empty
-              // selection
-              latex = prefix;
-              wasCollapsed = true;
-            }
-            cursor = model.at(selRange[0]);
+          if (options.select) {
+            const end = cursor.parent!.addChildrenAfter(atoms, cursor);
+            model.setSelection(
+              model.offsetOf(atoms[0].leftSibling),
+              model.offsetOf(end)
+            );
+          } else {
+            model.position = model.offsetOf(
+              cursor.parent!.addChildrenAfter(atoms, cursor)
+            );
           }
+          contentChanged = true;
+        };
 
+        const insertLatexGroup = (
+          latex: string,
+          options: { select: boolean }
+        ) => {
           const atom = new LatexGroupAtom(latex);
           cursor.parent!.addChildAfter(atom, cursor);
-          if (wasCollapsed) model.position = model.offsetOf(atom.lastChild);
-          else {
+          if (options.select) {
             model.setSelection(
               model.offsetOf(atom.firstChild),
               model.offsetOf(atom.lastChild)
             );
-          }
-        } else {
-          // Remove any error indicator on the current command sequence (if there is one)
-          getLatexGroupBody(model).forEach((x) => {
-            x.isError = false;
-          });
-        }
-
-        if (suffix) {
-          const atoms = parseLatex(suffix, {
-            context: this.context,
-            parseMode: currentMode,
-          });
-          model.collapseSelection('forward');
-          const cursor = model.at(model.position);
-          model.position = model.offsetOf(
-            cursor.parent!.addChildrenAfter(atoms, cursor)
-          );
+          } else model.position = model.offsetOf(atom.lastChild);
           contentChanged = true;
+        };
+
+        const getContent = () => {
+          const format =
+            mode === 'latex'
+              ? 'latex'
+              : mode === 'math'
+                ? 'plain-text'
+                : 'ascii-math';
+
+          const selRange = range(model.selection);
+          let content = this.model.getValue(selRange, format);
+
+          const atoms = this.model.extractAtoms(selRange);
+
+          // If we just had a placeholder selected, pretend we had an empty
+          // selection
+          if (atoms.length === 1 && atoms[0].type === 'placeholder')
+            content = suffix;
+
+          cursor = model.at(selRange[0]);
+
+          return content;
+        };
+
+        let contentChanged = false;
+
+        // 2.1. Disregard any pending inline shortcut
+        this.flushInlineShortcutBuffer();
+        this.stopCoalescingUndo();
+
+        // 2.2 If there is a LaTeX group, remove it
+        complete(this, 'accept');
+
+        if (model.selectionIsCollapsed) {
+          //
+          // 2.4a. If empty selection: insert prefix and suffix
+          //
+          insertString(prefix, { select: false });
+          model.mode = mode;
+          if (mode === 'latex') insertLatexGroup(suffix, { select: false });
+          else insertString(suffix, { select: false });
+        } else {
+          //
+          // 2.4b. Non-empty selection: convert the selection to the new mode
+          //
+          const content = getContent();
+          model.mode = mode;
+          if (mode === 'latex') insertLatexGroup(content, { select: true });
+          else insertString(content, { select: true });
         }
 
         requestUpdate(this);
@@ -1283,7 +1291,7 @@ If you are using Vue, this may be because you are using the runtime-only build o
       }
     );
 
-    this.model.mode = mode;
+    model.mode = mode;
 
     // Update the toolbar
     window.mathVirtualKeyboard.update(makeProxy(this));
@@ -1318,26 +1326,30 @@ If you are using Vue, this may be because you are using the runtime-only build o
   }
 
   applyStyle(inStyle: Style, inOptions: Range | ApplyStyleOptions = {}): void {
-    const options: ApplyStyleOptions = {
-      operation: 'set',
-      silenceNotifications: false,
-    };
-    if (isRange(inOptions)) options.range = inOptions;
-    else {
-      if (inOptions.operation === 'toggle') options.operation = 'toggle';
-      options.range = inOptions.range;
-      options.silenceNotifications = inOptions.silenceNotifications ?? false;
-    }
-    const style = validateStyle(this, inStyle);
-    const operation = options.operation ?? 'set';
+    let range: Range | undefined;
+    let operation: 'set' | 'toggle' = 'set';
+    let silenceNotifications = false;
 
-    if (options.range === undefined && this.model.selectionIsCollapsed) {
+    if (isRange(inOptions)) range = inOptions;
+    else {
+      if (inOptions.operation === 'toggle') operation = 'toggle';
+      range = inOptions.range;
+      silenceNotifications = inOptions.silenceNotifications ?? false;
+    }
+
+    if (range) range = this.model.normalizeRange(range);
+    if (range && range[0] === range[1]) range = undefined;
+
+    const style = validateStyle(this, inStyle);
+
+    if (range === undefined && this.model.selectionIsCollapsed) {
       // We don't have a selection. Set the global style instead.
       if (operation === 'set') {
-        // if ('color' in style) delete this.defaultStyle.verbatimColor;
-        // if ('backgroundColor' in style)
-        //   delete this.defaultStyle.verbatimBackgroundColor;
-        this.defaultStyle = { ...this.defaultStyle, ...style };
+        const newStyle: PrivateStyle = { ...this.defaultStyle };
+        if ('color' in style) delete newStyle.verbatimColor;
+        if ('backgroundColor' in style) delete newStyle.verbatimBackgroundColor;
+        this.defaultStyle = { ...newStyle, ...style };
+        this.styleBias = 'none';
         return;
       }
 
@@ -1353,47 +1365,37 @@ If you are using Vue, this may be because you are using the runtime-only build o
         } else newStyle[prop] = style[prop];
       }
       this.defaultStyle = newStyle;
+      this.styleBias = 'none';
       return;
     }
 
     this.model.deferNotifications(
-      { content: !options.silenceNotifications, type: 'insertText' },
+      { content: !silenceNotifications, type: 'insertText' },
       () => {
-        if (options.range === undefined) {
+        if (range === undefined) {
           for (const range of this.model.selection.ranges)
             applyStyle(this.model, range, style, { operation });
-        } else applyStyle(this.model, options.range, style, { operation });
+        } else applyStyle(this.model, range, style, { operation });
       }
     );
     requestUpdate(this);
   }
 
   toggleContextMenu(): boolean {
-    if (!this._menu.visible) return false;
-    if (this._menu.state === 'open') {
-      this._menu.hide();
+    const menu = this.menu;
+    if (!menu.visible) return false;
+    if (menu.state === 'open') {
+      menu.hide();
       return true;
     }
-    this._menu.show({
+    const caretBounds = getElementInfo(this, this.model.position)?.bounds;
+    if (!caretBounds) return false;
+    const location = { x: caretBounds.right, y: caretBounds.bottom };
+    menu.show({
       target: this.element!.querySelector<HTMLElement>('[part=container]')!,
-      location: this.getCaretPoint() ?? undefined,
+      location,
       onDismiss: () => this.element?.focus(),
     });
-    return true;
-  }
-
-  getCaretPoint(): { x: number; y: number } | null {
-    const caretOffset = getCaretPoint(this.field!);
-    return caretOffset ? { x: caretOffset.x, y: caretOffset.y } : null;
-  }
-
-  setCaretPoint(x: number, y: number): boolean {
-    const newPosition = offsetFromPoint(this, x, y, { bias: 0 });
-    if (newPosition < 0) return false;
-    const previousPosition = this.model.position;
-    this.model.position = newPosition;
-    this.model.announce('move', previousPosition);
-    requestUpdate(this);
     return true;
   }
 
@@ -1547,8 +1549,6 @@ If you are using Vue, this may be because you are using the runtime-only build o
 
   undo(): void {
     if (!this.undoManager.undo()) return;
-    if (window.mathVirtualKeyboard.visible)
-      window.mathVirtualKeyboard.update(makeProxy(this));
     this.host?.dispatchEvent(
       new CustomEvent('undo-state-change', {
         bubbles: true,
@@ -1560,13 +1560,11 @@ If you are using Vue, this may be because you are using the runtime-only build o
 
   redo(): void {
     if (!this.undoManager.redo()) return;
-    if (window.mathVirtualKeyboard.visible)
-      window.mathVirtualKeyboard.update(makeProxy(this));
     this.host?.dispatchEvent(
       new CustomEvent('undo-state-change', {
         bubbles: true,
         composed: true,
-        detail: { type: 'undo' },
+        detail: { type: 'redo' },
       })
     );
   }
@@ -1581,18 +1579,35 @@ If you are using Vue, this may be because you are using the runtime-only build o
     // Keep the content of the keyboard sink in sync with the selection.
     // Safari will not dispatch cut/copy/paste unless there is a DOM selection.
     this.keyboardDelegate.setValue(
-      model.getValue(this.model.selection, 'latex-expanded')
+      model.getValue(model.selection, 'latex-expanded')
     );
 
-    // Adjust mode
-    {
-      const cursor = model.at(model.position);
-      const newMode = cursor.mode ?? effectiveMode(this.options);
-      if (this.model.mode !== newMode) {
-        if (this.model.mode === 'latex') {
-          complete(this, 'accept', { mode: newMode });
-          model.position = model.offsetOf(cursor);
-        } else this.switchMode(newMode);
+    // If we move the selection outside of a LaTeX group, close the group
+    if (model.selectionIsCollapsed) {
+      const latexGroup = getLatexGroup(model);
+      const pos = model.position;
+      const cursor = model.at(pos);
+      const mode = cursor.mode ?? effectiveMode(this.options);
+      if (
+        latexGroup &&
+        (pos < model.offsetOf(latexGroup.firstChild) - 1 ||
+          pos > model.offsetOf(latexGroup.lastChild) + 1)
+      ) {
+        // We moved outside a LaTeX group
+        complete(this, 'accept', { mode });
+        model.position = model.offsetOf(cursor);
+      } else {
+        // If we're at the start or the end of a LaTeX group,
+        // move inside the group and don't switch mode.
+        const sibling = model.at(pos + 1);
+        if (sibling?.type === 'first' && sibling.mode === 'latex') {
+          model.position = pos + 1;
+        } else if (latexGroup && sibling?.mode !== 'latex') {
+          model.position = pos - 1;
+        } else {
+          // We may have moved from math to text, or text to math.
+          this.switchMode(mode);
+        }
       }
     }
 
@@ -1692,43 +1707,45 @@ If you are using Vue, this may be because you are using the runtime-only build o
 
     hideEnvironmentPopover();
 
-    //
-    // When the document/window loses focus, for example by switching
-    // to another tab, the mathfield will be blured. When the window
-    // regains focus, we'd like the focus to be restored on the mahtfield,
-    // like the browsers do for `<textarea>` elements. However, they
-    // don't do that for custom elements, so we do it ourselves. @futureweb
-    //
+    if (MathfieldElement.restoreFocusWhenDocumentFocused) {
+      //
+      // When the document/window loses focus, for example by switching
+      // to another tab, the mathfield will be blured. When the window
+      // regains focus, we'd like the focus to be restored on the mathfield,
+      // like the browsers do for `<textarea>` elements. However, they
+      // don't do that for custom elements, so we do it ourselves. @futureweb
+      //
 
-    // Wait for the window/document visibility to change
-    // (the mathfield gets blurred before the window)
-    const controller = new AbortController();
-    const signal = controller.signal;
-    document.addEventListener(
-      'visibilitychange',
-      () => {
-        if (document.visibilityState === 'hidden') {
-          document.addEventListener(
-            'visibilitychange',
-            () => {
-              if (
-                isValidMathfield(this) &&
-                document.visibilityState === 'visible'
-              )
-                this.focus({ preventScroll: true });
-            },
-            { once: true, signal }
-          );
-        }
-      },
-      { once: true, signal }
-    );
+      // Wait for the window/document visibility to change
+      // (the mathfield gets blurred before the window)
+      const controller = new AbortController();
+      const signal = controller.signal;
+      document.addEventListener(
+        'visibilitychange',
+        () => {
+          if (document.visibilityState === 'hidden') {
+            document.addEventListener(
+              'visibilitychange',
+              () => {
+                if (
+                  isValidMathfield(this) &&
+                  document.visibilityState === 'visible'
+                )
+                  this.focus({ preventScroll: true });
+              },
+              { once: true, signal }
+            );
+          }
+        },
+        { once: true, signal }
+      );
 
-    // If we haven't received a visibility change after a short delay,
-    // stop waiting for it (the delay has to be longer than at least
-    // 16ms: the documents that are not visible are throttled by the
-    // browser)
-    setTimeout(() => controller.abort(), 100);
+      // If something else gets the focus (could be the mathfield too),
+      // cancel the above
+      document.addEventListener('focusin', () => controller.abort(), {
+        once: true,
+      });
+    }
   }
 
   onInput(text: string): void {
@@ -1777,7 +1794,8 @@ If you are using Vue, this may be because you are using the runtime-only build o
       this.stopCoalescingUndo();
 
       // Copy to the clipboard
-      ModeEditor.onCopy(this, ev);
+      if (ev.clipboardData) ModeEditor.onCopy(this, ev);
+      else ModeEditor.copyToClipboard(this, 'latex');
 
       // Delete the selection
       deleteRange(this.model, range(this.model.selection), 'deleteByCut');
@@ -1789,7 +1807,8 @@ If you are using Vue, this may be because you are using the runtime-only build o
   }
 
   onCopy(ev: ClipboardEvent): void {
-    ModeEditor.onCopy(this, ev);
+    if (ev.clipboardData) ModeEditor.onCopy(this, ev);
+    else ModeEditor.copyToClipboard(this, 'latex');
   }
 
   onPaste(ev: ClipboardEvent): boolean {
@@ -1812,7 +1831,7 @@ If you are using Vue, this may be because you are using the runtime-only build o
   }
 
   private onGeometryChange(): void {
-    this._menu.hide();
+    this._menu?.hide();
     updateSuggestionPopoverPosition(this);
     updateEnvironmentPopover(this);
   }
@@ -1852,6 +1871,7 @@ If you are using Vue, this may be because you are using the runtime-only build o
       smartFence: this.smartFence,
       letterShapeStyle: this.letterShapeStyle,
       minFontScale: this.minFontScale,
+      maxMatrixCols: this.maxMatrixCols,
       placeholderSymbol: this.options.placeholderSymbol ?? '▢',
       colorMap: (name) => this.colorMap(name),
       backgroundColorMap: (name) => this.backgroundColorMap(name),
