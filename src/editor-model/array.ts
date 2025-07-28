@@ -468,8 +468,12 @@ export const alignedDelimiters = new Set([
   '>',
   '\\gt',
   '\\lt',
+  '\\le',
+  '\\ge',
   '\\geq',
   '\\leq',
+  '\\ll',
+  '\\gg',
   '\\geqslant',
   '\\leqslant',
 ]);
