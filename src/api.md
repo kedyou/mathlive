@@ -3756,6 +3756,16 @@ addRowBefore: (model) => boolean;
 
 <MemberCard>
 
+##### Commands.createAlignedEnvironment()
+
+```ts
+createAlignedEnvironment: (model) => boolean;
+```
+
+</MemberCard>
+
+<MemberCard>
+
 ##### Commands.removeColumn()
 
 ```ts
@@ -5045,6 +5055,22 @@ hide(options?): void
 
 <MemberCard>
 
+##### VirtualKeyboardInterface.manualClose()
+
+```ts
+manualClose(options?): void
+```
+
+###### options?
+
+###### animate
+
+`boolean`
+
+</MemberCard>
+
+<MemberCard>
+
 ##### VirtualKeyboardInterface.setKeycap()
 
 ```ts
@@ -5759,6 +5785,7 @@ type VirtualKeyboardMessageAction =
   | "execute-command"
   | "show"
   | "hide"
+  | "manual-close"
   | "update-setting"
   | "update-toolbar"
   | "synchronize-proxy"
@@ -6458,6 +6485,26 @@ registers: Registers;
 LaTeX global registers override.
 
 </MemberCard>
+
+</MemberCard>
+
+<MemberCard>
+
+### DEFAULT\_KEYBOARD\_TOGGLE\_GLYPH
+
+```ts
+const DEFAULT_KEYBOARD_TOGGLE_GLYPH: string;
+```
+
+</MemberCard>
+
+<MemberCard>
+
+### MENU\_GLYPH
+
+```ts
+const MENU_GLYPH: string;
+```
 
 </MemberCard>
 
