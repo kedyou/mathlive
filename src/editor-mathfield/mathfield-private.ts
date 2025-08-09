@@ -1005,6 +1005,9 @@ If you are using Vue, this may be because you are using the runtime-only build o
    * the page
    */
   scrollIntoView(): void {
+    return;
+    /* Kedyou: stub scrollIntoView
+
     if (!this.element) return;
     //
     // 1/ If using a mathfield element, make sure that the element is visible.
@@ -1098,6 +1101,7 @@ If you are using Vue, this may be because you are using the runtime-only build o
         left,
       });
     }
+    */
   }
 
   insert(s: string, options?: InsertOptions): boolean {
