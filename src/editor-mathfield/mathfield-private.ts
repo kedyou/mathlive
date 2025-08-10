@@ -864,9 +864,11 @@ If you are using Vue, this may be because you are using the runtime-only build o
         break;
 
       case 'pointerdown':
+        // Kedyou: comment out this.userSelect !== none because it breaks on Chrome
+        // https://github.com/kedyou/kedyou-frontend/issues/1150
         if (
           !evt.defaultPrevented &&
-          this.userSelect !== 'none' &&
+          /** this.userSelect !== 'none' && */
           !(evt.target as HTMLElement | null)?.closest(
             '[part=virtual-keyboard-toggle],[part=menu-toggle]'
           )
