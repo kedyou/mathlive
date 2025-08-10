@@ -323,15 +323,10 @@ export function makeEditToolbar(
 
   const availableActions: string[] = [];
 
-  if (mathfield.selectionIsCollapsed)
-    availableActions.push('undo', 'redo', 'pasteFromClipboard');
-  else {
-    availableActions.push(
-      'cutToClipboard',
-      'copyToClipboard',
-      'pasteFromClipboard'
-    );
-  }
+  if (mathfield.selectionIsCollapsed) availableActions.push('undo', 'redo');
+  else availableActions.push('cutToClipboard', 'copyToClipboard');
+
+  availableActions.push('pasteFromClipboard', 'closeVirtualKeyboard');
 
   const actionsMarkup = {
     undo: `<div class='action ${mathfield.canUndo === false ? 'disabled' : ''}'
@@ -365,6 +360,13 @@ export function makeEditToolbar(
             <svg><use xlink:href='#svg-paste' /></svg>
         </div>
     `,
+    closeVirtualKeyboard: `
+				<div class='action'
+						data-command='"closeVirtualKeyboard"'
+						data-tooltip='${l10n('tooltip.close')}'
+						style="font-size:200%;line-height:0"
+				>&times;</div>
+		`,
   };
 
   // The right hand side of the toolbar, with the copy/undo/redo commands
@@ -765,7 +767,7 @@ export const KEYCAP_SHORTCUTS: Record<
   },
   '[action]': {
     class: 'action hide-shift',
-    command: 'performWithFeedback(commit)',
+    command: 'performWithFeedback(createAlignedEnvironment)',
     shift: {
       label: '<svg class=svg-glyph><use xlink:href=#circle-plus /></svg>',
       command: 'performWithFeedback(addRowAfter)',

@@ -266,6 +266,8 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
       window.addEventListener('message', this);
     }
 
+    /* Kedyou: remove focus event listeners to allow our client to choose
+    /* whether the virtual keyboard is shown when focused
     // Listen for when a mathfield gets focused, and show
     // the virtual keyboard if needed
     document.addEventListener('focusin', (event: FocusEvent) => {
@@ -294,6 +296,7 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
         }, 300);
       }
     });
+    */
   }
 
   addEventListener(
@@ -313,6 +316,20 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
       else x?.handleEvent(event);
     });
     return !event.defaultPrevented;
+  }
+
+  /**
+   * Fire a specific event for when the close button is clicked on the virtual keyboard
+   */
+  manualClose({ animate = false } = {}): void {
+    this.hide({ animate });
+    this.dispatchEvent(
+      new Event('manual-close', {
+        bubbles: true,
+        cancelable: false,
+        composed: true,
+      })
+    );
   }
 
   removeEventListener(

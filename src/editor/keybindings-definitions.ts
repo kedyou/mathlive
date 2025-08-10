@@ -60,8 +60,8 @@ export const DEFAULT_KEYBINDINGS: Keybinding[] = [
   {
     key: '[Escape]',
     ifMode: 'latex',
-    command: ['complete', 'complete', { selectItem: 'true' }],
-  }, // Accept the entry (without the suggestion) and select
+    command: ['complete', 'reject'],
+  }, // Cancel LaTeX mode
 
   {
     key: '\\',
@@ -190,6 +190,7 @@ export const DEFAULT_KEYBINDINGS: Keybinding[] = [
   { key: 'ctrl+[Enter]', ifMode: 'math', command: 'addRowAfter' },
   { key: 'cmd+[Return]', ifMode: 'math', command: 'addRowAfter' },
   { key: 'cmd+[Enter]', ifMode: 'math', command: 'addRowAfter' },
+  { key: '[Enter]', ifMode: 'math', command: 'createAlignedEnvironment' },
 
   // Excel keybindings:
   // shift+space: select entire row, ctrl+space: select an entire column

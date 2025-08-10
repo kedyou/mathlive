@@ -137,11 +137,11 @@ import { TextAtom } from 'atoms/text';
 import { getLatexGroup } from './mode-editor-latex';
 import { MenuItem } from 'public/ui-menu-types';
 
-const DEFAULT_KEYBOARD_TOGGLE_GLYPH = `<svg xmlns="http://www.w3.org/2000/svg" style="width: 21px;"  viewBox="0 0 576 512" role="img" aria-label="${localize(
+export const DEFAULT_KEYBOARD_TOGGLE_GLYPH = `<svg xmlns="http://www.w3.org/2000/svg" style="width: 21px;"  viewBox="0 0 576 512" role="img" aria-label="${localize(
   'tooltip.toggle virtual keyboard'
 )}"><path d="M528 64H48C21.49 64 0 85.49 0 112v288c0 26.51 21.49 48 48 48h480c26.51 0 48-21.49 48-48V112c0-26.51-21.49-48-48-48zm16 336c0 8.823-7.177 16-16 16H48c-8.823 0-16-7.177-16-16V112c0-8.823 7.177-16 16-16h480c8.823 0 16 7.177 16 16v288zM168 268v-24c0-6.627-5.373-12-12-12h-24c-6.627 0-12 5.373-12 12v24c0 6.627 5.373 12 12 12h24c6.627 0 12-5.373 12-12zm96 0v-24c0-6.627-5.373-12-12-12h-24c-6.627 0-12 5.373-12 12v24c0 6.627 5.373 12 12 12h24c6.627 0 12-5.373 12-12zm96 0v-24c0-6.627-5.373-12-12-12h-24c-6.627 0-12 5.373-12 12v24c0 6.627 5.373 12 12 12h24c6.627 0 12-5.373 12-12zm96 0v-24c0-6.627-5.373-12-12-12h-24c-6.627 0-12 5.373-12 12v24c0 6.627 5.373 12 12 12h24c6.627 0 12-5.373 12-12zm-336 80v-24c0-6.627-5.373-12-12-12H84c-6.627 0-12 5.373-12 12v24c0 6.627 5.373 12 12 12h24c6.627 0 12-5.373 12-12zm384 0v-24c0-6.627-5.373-12-12-12h-24c-6.627 0-12 5.373-12 12v24c0 6.627 5.373 12 12 12h24c6.627 0 12-5.373 12-12zM120 188v-24c0-6.627-5.373-12-12-12H84c-6.627 0-12 5.373-12 12v24c0 6.627 5.373 12 12 12h24c6.627 0 12-5.373 12-12zm96 0v-24c0-6.627-5.373-12-12-12h-24c-6.627 0-12 5.373-12 12v24c0 6.627 5.373 12 12 12h24c6.627 0 12-5.373 12-12zm96 0v-24c0-6.627-5.373-12-12-12h-24c-6.627 0-12 5.373-12 12v24c0 6.627 5.373 12 12 12h24c6.627 0 12-5.373 12-12zm96 0v-24c0-6.627-5.373-12-12-12h-24c-6.627 0-12 5.373-12 12v24c0 6.627 5.373 12 12 12h24c6.627 0 12-5.373 12-12zm96 0v-24c0-6.627-5.373-12-12-12h-24c-6.627 0-12 5.373-12 12v24c0 6.627 5.373 12 12 12h24c6.627 0 12-5.373 12-12zm-96 152v-8c0-6.627-5.373-12-12-12H180c-6.627 0-12 5.373-12 12v8c0 6.627 5.373 12 12 12h216c6.627 0 12-5.373 12-12z"/></svg>`;
 
-const MENU_GLYPH = `<svg xmlns="http://www.w3.org/2000/svg" style="height: 18px;" viewBox="0 0 448 512" role="img" aria-label="${localize(
+export const MENU_GLYPH = `<svg xmlns="http://www.w3.org/2000/svg" style="height: 18px;" viewBox="0 0 448 512" role="img" aria-label="${localize(
   'tooltip.menu'
 )}"><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg>`;
 
@@ -807,7 +807,9 @@ If you are using Vue, this may be because you are using the runtime-only build o
         break;
 
       case 'pointerdown':
-        if (!evt.defaultPrevented && this.userSelect !== 'none') {
+        // Kedyou: comment out this.userSelect !== none because it breaks on Chrome
+        // https://github.com/kedyou/kedyou-frontend/issues/1150
+        if (!evt.defaultPrevented /** && this.userSelect !== 'none'  */) {
           onPointerDown(this, evt as PointerEvent);
           // Firefox convention: holding the shift key disables custom context menu
           if ((evt as PointerEvent).shiftKey === false) {
@@ -841,13 +843,6 @@ If you are using Vue, this may be because you are using the runtime-only build o
 
       case 'virtual-keyboard-toggle':
         if (this.hasFocus()) updateEnvironmentPopover(this);
-        // Workaround a Chromium 133+ issue where the keyboard sink loses focus
-        // when the virtual keyboard is shown
-        // https://github.com/arnog/mathlive/issues/2588
-        if (this.hasFocus()) {
-          this.keyboardDelegate.blur();
-          this.keyboardDelegate.focus();
-        }
         break;
 
       case 'resize':
@@ -1004,6 +999,8 @@ If you are using Vue, this may be because you are using the runtime-only build o
    */
   scrollIntoView(): void {
     if (!this.element) return;
+
+    /* Kedyou: stub scrollIntoView
     //
     // 1/ If using a mathfield element, make sure that the element is visible.
     //
@@ -1030,6 +1027,7 @@ If you are using Vue, this may be because you are using the runtime-only build o
         }
       }
     }
+    */
 
     //
     // 2/ If a render is pending, do it now to make sure we have correct layout
@@ -1037,6 +1035,7 @@ If you are using Vue, this may be because you are using the runtime-only build o
     //
     if (this.dirty) render(this, { interactive: true });
 
+    /* Kedyou: we need the mathfield to render, but not the rest
     //
     // 3/ Get the position of the caret
     //
@@ -1096,6 +1095,7 @@ If you are using Vue, this may be because you are using the runtime-only build o
         left,
       });
     }
+    */
   }
 
   insert(s: string, options?: InsertOptions): boolean {
@@ -1669,32 +1669,9 @@ If you are using Vue, this may be because you are using the runtime-only build o
 
     render(this, { interactive: true });
 
-    setTimeout(() => {
-      if (!isValidMathfield(this)) return;
-
-      //
-      // Capture the focus/blur events to avoid double-dispatching
-      //
-      const abortController = new AbortController();
-      const signal = abortController.signal;
-      for (const event of ['focus', 'blur', 'focusin', 'focusout']) {
-        this.host?.addEventListener(
-          event,
-          (evt) => {
-            evt.preventDefault();
-            evt.stopPropagation();
-          },
-          { once: true, capture: true, signal }
-        );
-      }
-
-      this.keyboardDelegate.blur();
-      this.keyboardDelegate.focus();
-      this.connectToVirtualKeyboard();
-      this.focusBlurInProgress = false;
-
-      abortController.abort();
-    }, 60);
+    this.keyboardDelegate.focus();
+    this.connectToVirtualKeyboard();
+    this.focusBlurInProgress = false;
   }
 
   onBlur(): void {
