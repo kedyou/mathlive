@@ -6833,6 +6833,26 @@ Format types supported by static elements
 
 <MemberCard>
 
+### DEFAULT\_KEYBOARD\_TOGGLE\_GLYPH {#default_keyboard_toggle_glyph}
+
+```ts
+const DEFAULT_KEYBOARD_TOGGLE_GLYPH: string;
+```
+
+</MemberCard>
+
+<MemberCard>
+
+### MENU\_GLYPH {#menu_glyph}
+
+```ts
+const MENU_GLYPH: string;
+```
+
+</MemberCard>
+
+<MemberCard>
+
 ### version {#version-1}
 
 ```ts

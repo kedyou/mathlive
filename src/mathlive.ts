@@ -15,6 +15,10 @@ import {
   convertLatexToSpeakableText,
   convertMathJsonToLatex,
 } from './public/mathlive-ssr';
+export {
+  DEFAULT_KEYBOARD_TOGGLE_GLYPH,
+  MENU_GLYPH,
+} from 'editor-mathfield/mathfield-private';
 
 import './public/math-static-elements';
 export { MathSpanElement, MathDivElement } from './public/math-static-elements';
