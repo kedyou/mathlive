@@ -3746,6 +3746,16 @@ addRowBefore: (model) => boolean;
 
 <MemberCard>
 
+##### Commands.createAlignedEnvironment {#createalignedenvironment}
+
+```ts
+createAlignedEnvironment: (model) => boolean;
+```
+
+</MemberCard>
+
+<MemberCard>
+
 ##### Commands.removeColumn {#removecolumn}
 
 ```ts

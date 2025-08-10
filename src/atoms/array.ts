@@ -790,28 +790,28 @@ export class ArrayAtom extends Atom {
     this.isDirty = true;
   }
 
-  addRowBefore(row: number): void {
+  addRowBefore(row: number, placeholders = !this.isMultiline): void {
     console.assert(this.type === 'array' && Array.isArray(this._rows));
 
     this._rows.splice(
       row,
       0,
       Array.from({ length: this.colCount }, () =>
-        makeEmptyCell(this, !this.isMultiline)
+        makeEmptyCell(this, placeholders)
       )
     );
     adjustBranches(this);
     this.isDirty = true;
   }
 
-  addRowAfter(row: number): void {
+  addRowAfter(row: number, placeholders = !this.isMultiline): void {
     console.assert(this.type === 'array' && Array.isArray(this._rows));
 
     this._rows.splice(
       row + 1,
       0,
       Array.from({ length: this.colCount }, () =>
-        makeEmptyCell(this, !this.isMultiline)
+        makeEmptyCell(this, placeholders)
       )
     );
 
