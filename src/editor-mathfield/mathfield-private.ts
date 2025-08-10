@@ -894,22 +894,6 @@ If you are using Vue, this may be because you are using the runtime-only build o
 
       case 'virtual-keyboard-toggle':
         if (this.hasFocus()) updateEnvironmentPopover(this);
-        // Workaround a Chromium 133+ issue where the keyboard sink loses focus
-        // when the virtual keyboard is shown
-        // https://github.com/arnog/mathlive/issues/2588
-        // Only do the blur/focus cycle if the keyboard policy is not manual
-        // to avoid interfering with manual keyboard control (#2859)
-        if (
-          this.hasFocus() &&
-          this.options.mathVirtualKeyboardPolicy !== 'manual'
-        ) {
-          // Prevent the blur/focus cycle from triggering onBlur/onFocus
-          // which would disconnect/reconnect the virtual keyboard
-          this.focusBlurInProgress = true;
-          this.keyboardDelegate.blur();
-          this.keyboardDelegate.focus();
-          this.focusBlurInProgress = false;
-        }
         break;
 
       case 'resize':
@@ -1738,7 +1722,7 @@ If you are using Vue, this may be because you are using the runtime-only build o
     );
   }
 
-  onFocus(options?: { suppressEvents?: boolean }): void {
+  onFocus(_options?: { suppressEvents?: boolean }): void {
     if (this.disabled || this.focusBlurInProgress || !this.blurred) return;
 
     // If another mathfield is globally tracked as focused, blur it first.
@@ -1779,54 +1763,14 @@ If you are using Vue, this may be because you are using the runtime-only build o
 
     render(this, { interactive: true });
 
+    this.keyboardDelegate.focus();
+    this.connectToVirtualKeyboard();
+    this.focusBlurInProgress = false;
+
+    // Clear the flag after the DOM focus event has been processed
     setTimeout(() => {
-      if (!isValidMathfield(this)) return;
-
-      // Only suppress events when responding to a DOM focus event to avoid
-      // double-dispatching (fixes #2665). When focus() is called
-      // programmatically, we want the events to fire normally (fixes #2816).
-      const suppressEvents = options?.suppressEvents ?? false;
-      if (suppressEvents) {
-        //
-        // Capture the focus/blur events to avoid double-dispatching
-        // When responding to a DOM focus event, just focus the keyboard
-        // delegate without the blur/focus cycle
-        //
-        const abortController = new AbortController();
-        const signal = abortController.signal;
-        const captureEvent = (evt: Event) => {
-          evt.preventDefault();
-          evt.stopPropagation();
-        };
-
-        // Add listeners that will capture focus/focusin events
-        for (const event of ['focus', 'focusin']) {
-          this.host?.addEventListener(event, captureEvent, {
-            capture: true,
-            signal,
-          });
-        }
-
-        this.focusBlurInProgress = false;
-        this.keyboardDelegate.focus();
-        this.connectToVirtualKeyboard();
-
-        // Abort the event listeners after a short delay to ensure all
-        // events from the focus have been captured
-        setTimeout(() => abortController.abort(), 0);
-      } else {
-        // Programmatic focus() call - just focus the keyboard delegate
-        // without blurring first (no need since we're not focused yet)
-        this.focusBlurInProgress = false;
-        this.keyboardDelegate.focus();
-        this.connectToVirtualKeyboard();
-
-        // Clear the flag after the DOM focus event has been processed
-        setTimeout(() => {
-          this.programmaticFocusInProgress = false;
-        }, 0);
-      }
-    }, 60);
+      this.programmaticFocusInProgress = false;
+    }, 0);
   }
 
   onBlur(options?: { dispatchEvents?: boolean }): void {
