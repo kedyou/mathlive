@@ -5035,6 +5035,22 @@ hide(options?): void
 
 <MemberCard>
 
+##### VirtualKeyboardInterface.manualClose() {#manualclose}
+
+```ts
+manualClose(options?): void
+```
+
+###### options?
+
+###### animate
+
+`boolean`
+
+</MemberCard>
+
+<MemberCard>
+
 ##### VirtualKeyboardInterface.setKeycap() {#setkeycap}
 
 ```ts
@@ -5749,6 +5765,7 @@ type VirtualKeyboardMessageAction =
   | "execute-command"
   | "show"
   | "hide"
+  | "manual-close"
   | "update-setting"
   | "update-toolbar"
   | "synchronize-proxy"
