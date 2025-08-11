@@ -7,40 +7,43 @@
     "type": "individual",
     "url": "https://paypal.me/arnogourdol"
   },
-  "private": true,
   "files": [
     "/dist"
   ],
-  "types": "./types/mathlive.d.ts",
-  "module": "./mathlive.min.mjs",
-  "main": "./mathlive.min.js",
+  "types": "./dist/types/mathlive.d.ts",
+  "module": "./dist/mathlive.min.mjs",
+  "main": "./dist/mathlive.min.js",
   "exports": {
-    "./vue": "./vue-mathlive.mjs",
-    "./fonts.css": "./mathlive-fonts.css",
-    "./static.css": "./mathlive-static.css",
     ".": {
       "browser": {
         "production": {
-          "types": "./types/mathlive.d.ts",
-          "import": "./mathlive.min.mjs",
-          "require": "./mathlive.min.js"
+          "types": "./dist/types/mathlive.d.ts",
+          "import": "./dist/mathlive.min.mjs",
+          "require": "./dist/mathlive.min.js"
         },
         "development": {
-          "types": "./types/mathlive.d.ts",
-          "import": "./mathlive.mjs",
-          "require": "./mathlive.js"
+          "types": "./dist/types/mathlive.d.ts",
+          "import": "./dist/mathlive.mjs",
+          "require": "./dist/mathlive.js"
         }
       },
       "default": {
-        "types": "./types/mathlive.d.ts",
-        "import": "./mathlive.min.mjs",
-        "require": "./mathlive.min.js"
+        "types": "./dist/types/mathlive.d.ts",
+        "import": "./dist/mathlive.min.mjs",
+        "require": "./dist/mathlive.min.js"
       }
     },
     "./ssr": {
-      "types": "./types/mathlive-ssr.d.ts",
-      "import": "./mathlive-ssr.min.mjs"
-    }
+      "types": "./dist/types/mathlive-ssr.d.ts",
+      "import": "./dist/mathlive-ssr.min.mjs"
+    },
+    "./vue": "./dist/vue-mathlive.mjs",
+    "./fonts.css": "./dist/mathlive-fonts.css",
+    "./static.css": "./dist/mathlive-static.css",
+    "./fonts/*": "./dist/fonts/*",
+    "./sounds/*": "./dist/sounds/*",
+    "./fonts/": "./dist/fonts/*",
+    "./sounds/": "./dist/sounds/*"
   },
   "repository": {
     "type": "git",
