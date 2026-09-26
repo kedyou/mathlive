@@ -722,7 +722,7 @@ register(
     },
     moveToMathfieldStart: (model: _Model): boolean => {
       const offset = model.firstOffsetOfAligned;
-      if (model.selectionIsCollapsed && offset === 0) {
+      if (model.selectionIsCollapsed && model.position === offset) {
         model.announce('plonk');
         return false;
       }
@@ -733,7 +733,7 @@ register(
     },
     moveToMathfieldEnd: (model: _Model): boolean => {
       const offset = model.lastOffsetOfAligned;
-      if (model.selectionIsCollapsed && offset === model.lastOffset) {
+      if (model.selectionIsCollapsed && model.position === offset) {
         model.announce('plonk');
         return false;
       }
