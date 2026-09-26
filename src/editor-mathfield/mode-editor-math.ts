@@ -25,6 +25,37 @@ import { _Mathfield } from './mathfield-private';
 import { ModeEditor } from './mode-editor';
 import type { AtomJson } from 'core/types';
 
+/**
+ * Kedyou: when inserting into the first column of an aligned environment,
+ * move an aligned delimiter (and what follows it) to the start of the
+ * second column, unless the second column already starts with one.
+ *
+ * Return false if nothing was inserted.
+ */
+function insertIntoAlignedColumns(
+  cursor: Atom,
+  atoms: readonly Atom[]
+): boolean {
+  const aligned = cursor.parent;
+  if (
+    !(aligned instanceof ArrayAtom) ||
+    !isAlignEnvironment(aligned.environmentName) ||
+    cursor.parentBranch![1] !== 0
+  )
+    return false;
+
+  const secondColumn = aligned.rows[cursor.parentBranch![0]][1];
+  if (secondColumn[1] && alignedDelimiters.has(secondColumn[1].command))
+    return false;
+
+  const i = atoms.findIndex((x) => alignedDelimiters.has(x.command));
+  if (i < 0) return false;
+
+  if (i > 0) aligned.addChildrenAfter(atoms.slice(0, i), cursor);
+  aligned.addChildrenAfter(atoms.slice(i), secondColumn[0]);
+  return true;
+}
+
 export class MathModeEditor extends ModeEditor {
   constructor() {
     super('math');
@@ -89,7 +120,12 @@ export class MathModeEditor extends ModeEditor {
               cursor.parent.addColumn();
 
             // add content to the first cell
-            cursor.parent.addChildrenAfter(columns[0], cursor);
+            // Kedyou: a single pasted cell follows the aligned delimiter rule
+            if (
+              columns.length > 1 ||
+              !insertIntoAlignedColumns(cursor, columns[0])
+            )
+              cursor.parent.addChildrenAfter(columns[0], cursor);
             // replace the rest of the columns
             for (let i = 1; i < columns.length; i++) {
               currentColumn++;
@@ -339,46 +375,8 @@ export class MathModeEditor extends ModeEditor {
 
       const cursor = model.at(model.position);
       if (cursor) {
-        // Kedyou: insert aligned delimiter into the second aligned column if typing in the first
-        let insertDefault = true;
-        if (
-          cursor.parent instanceof ArrayAtom &&
-          isAlignEnvironment(cursor.parent.environmentName) && // in aligned
-          cursor.parentBranch![1] === 0 // in the first column
-        ) {
-          // make sure the second column doesn't already have a delimiter
-          const secondColumn = cursor.parent.rows[cursor.parentBranch![0]][1];
-          if (
-            !secondColumn[1] ||
-            !alignedDelimiters.has(secondColumn[1].command)
-          ) {
-            // check if newAtoms is inserting an aligned delimiter
-            let i = 0;
-            for (; i < newAtoms.length; i++) {
-              if (alignedDelimiters.has(newAtoms[i].command)) break;
-            }
-            if (i < newAtoms.length) {
-              // insert the delimiter to the second column, move cursor
-              insertDefault = false;
-              if (i > 0) {
-                cursor.parent.addChildrenAfter(
-                  newAtoms.slice(0, i - 1),
-                  cursor
-                );
-                cursor.parent.addChildrenAfter(
-                  newAtoms.slice(i),
-                  secondColumn[0]
-                );
-              } else {
-                cursor.parent.addChildrenAfter(newAtoms, secondColumn[0]);
-              }
-            }
-          }
-        }
-
-        if (insertDefault) {
+        if (!insertIntoAlignedColumns(cursor, newAtoms))
           cursor.parent!.addChildrenAfter(newAtoms, cursor);
-        }
       } else {
         // cursor can be null when deferred implicit arg deletion
         // leaves model.position pointing past the last atom
