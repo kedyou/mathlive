@@ -123,6 +123,9 @@ test('cannot edit readonly mathfield', async ({ page }) => {
   ).toBe('x=\\frac{3}{4}');
 });
 
+// Kedyou: Escape cancels latex mode, see
+// 'escape cancels latex mode' in kedyou.spec.ts
+/*
 test('escape to enter/exit latex mode', async ({ page }) => {
   await page.goto('/dist/playwright-test-page/');
 
@@ -153,7 +156,11 @@ test('escape to enter/exit latex mode', async ({ page }) => {
     await page.locator('#mf-5').evaluate((e: MathfieldElement) => e.value)
   ).toBe('lozenge');
 });
+*/
 
+// Kedyou: Enter creates an aligned environment, see
+// 'enter exits latex mode, then creates an aligned environment' in kedyou.spec.ts
+/*
 test('backslash to enter, enter to exit latex mode', async ({ page }) => {
   await page.goto('/dist/playwright-test-page/');
 
@@ -179,6 +186,7 @@ test('backslash to enter, enter to exit latex mode', async ({ page }) => {
     await page.locator('#mf-5').evaluate((e: MathfieldElement) => e.value)
   ).toBe('\\backslash lozenge');
 });
+*/
 
 test('Select all/type to replace selection', async ({ page, browserName }) => {
   const modifierKey = /Mac|iPod|iPhone|iPad/.test(
@@ -520,6 +528,9 @@ test('keyboard cut and paste', async ({ page, browserName }) => {
   ).toBe('30=r+t');
 });
 
+// Kedyou: Enter creates an aligned environment, see
+// 'enter keeps \mathbb{R}^0 intact in the aligned environment' in kedyou.spec.ts
+/*
 test('mathbb with superscript (issue #2867)', async ({ page }) => {
   await page.goto('/dist/playwright-test-page/');
 
@@ -537,7 +548,11 @@ test('mathbb with superscript (issue #2867)', async ({ page }) => {
   // Should serialize as \mathbb{R}^0, not \mathbb{R^0}
   expect(latex).toBe('\\mathbb{R}^0');
 });
+*/
 
+// Kedyou: addRowAfter creates an aligned environment, see
+// 'deleting everything leaves an empty aligned environment' in kedyou.spec.ts
+/*
 test('backspace on empty displaylines (issue #2739)', async ({ page }) => {
   await page.goto('/dist/playwright-test-page/');
 
@@ -568,6 +583,7 @@ test('backspace on empty displaylines (issue #2739)', async ({ page }) => {
   // Accept either empty string, empty displaylines, or displaylines with just whitespace
   expect(['', '\\displaylines{}', '\\displaylines{\\\\ }']).toContain(latex);
 });
+*/
 
 test('delete range with sqrt - all content (issue #2686)', async ({ page }) => {
   await page.goto('/dist/playwright-test-page/');

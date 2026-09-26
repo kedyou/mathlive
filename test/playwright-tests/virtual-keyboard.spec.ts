@@ -91,6 +91,9 @@ async function virtualKeyboardSample2(
   return 'n=x^2';
 }
 
+// Kedyou: the virtual keyboard isn't hidden on focus out, see
+// 'virtual keyboard stays visible when no mathfield is focused' in kedyou.spec.ts
+/*
 test('virtual keyboard with two math fields', async ({ page }) => {
   await page.goto('/dist/playwright-test-page/');
 
@@ -134,6 +137,7 @@ test('virtual keyboard with two math fields', async ({ page }) => {
     .getByText('123')
     .waitFor({ state: 'detached' });
 });
+*/
 
 test('math fields in iframe with virtual keyboard', async ({ page }) => {
   await page.goto('/dist/playwright-test-page/iframe_test.html');
