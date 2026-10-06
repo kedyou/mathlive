@@ -305,3 +305,74 @@ test('virtual keyboard close button hides the keyboard', async ({ page }) => {
   );
   await toolbar.getByText('123').waitFor({ state: 'detached' });
 });
+
+test('virtual keyboard menu inserts a matrix', async ({ page }) => {
+  await page.goto('/dist/playwright-test-page/');
+
+  await page.locator('.ML__virtual-keyboard-toggle').nth(0).click();
+  await page.locator('.MLK__layer.is-visible .MLK__menu-toggle').click();
+
+  // The keyboard menu only has the insert menus of the mathfield menu
+  await expect(page.getByRole('menuitem')).toHaveText([
+    'Insert Matrix',
+    'Insert',
+  ]);
+
+  await page.getByRole('menuitem', { name: 'Insert Matrix' }).click();
+  await page.locator('[data-tooltip="2 × 3"]').click();
+
+  await expect
+    .poll(() =>
+      page.locator('#mf-1').evaluate((mfe: MathfieldElement) => mfe.value)
+    )
+    .toBe(
+      '\\begin{pmatrix}\\placeholder{} & \\placeholder{} & \\placeholder{}\\\\ \\placeholder{} & \\placeholder{} & \\placeholder{}\\end{pmatrix}'
+    );
+  await expect(page.getByRole('menu')).toHaveCount(0);
+});
+
+test('virtual keyboard menu insert keeps the mathfield focused', async ({
+  page,
+}) => {
+  await page.goto('/dist/playwright-test-page/');
+  const keycap = (label: string) =>
+    page.locator(`.MLK__layer.is-visible [aria-label="${label}"]`).first();
+
+  await page.locator('.ML__virtual-keyboard-toggle').nth(0).click();
+  await page.locator('.MLK__layer.is-visible .MLK__menu-toggle').click();
+  await page.getByRole('menuitem', { name: 'Insert', exact: true }).click();
+  await page.getByRole('menuitem', { name: /Absolute Value/ }).click();
+  await expect(page.getByRole('menu')).toHaveCount(0);
+
+  // The keyboard still types into the mathfield, inside the inserted template
+  await keycap('1').click();
+
+  await expect
+    .poll(() =>
+      page.locator('#mf-1').evaluate((mfe: MathfieldElement) => mfe.value)
+    )
+    .toBe('|1|');
+  expect(
+    await page
+      .locator('#mf-1')
+      .evaluate((mfe: MathfieldElement) => mfe.hasFocus())
+  ).toBe(true);
+});
+
+test('virtual keyboard menu is dismissed with escape', async ({ page }) => {
+  await page.goto('/dist/playwright-test-page/');
+
+  await page.locator('.ML__virtual-keyboard-toggle').nth(0).click();
+  await page.locator('.MLK__layer.is-visible .MLK__menu-toggle').click();
+  await expect(page.getByRole('menu')).toHaveCount(1);
+
+  await page.keyboard.press('Escape');
+
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(page.getByRole('toolbar').getByText('123')).toBeVisible();
+  expect(
+    await page
+      .locator('#mf-1')
+      .evaluate((mfe: MathfieldElement) => mfe.hasFocus())
+  ).toBe(true);
+});

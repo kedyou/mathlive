@@ -298,7 +298,7 @@ class InsertMatrixMenuItem extends _MenuItemState<{
   }
 }
 
-function getInsertMatrixSubmenu(mf: _Mathfield): MenuItem[] {
+function getInsertMatrixSubmenu(mf: InsertMenuTarget): MenuItem[] {
   const result: MenuItem[] = [];
 
   for (let row = 1; row <= 5; row++) {
@@ -325,6 +325,37 @@ function getInsertMatrixSubmenu(mf: _Mathfield): MenuItem[] {
   }
 
   return result;
+}
+
+/**
+ * Kedyou: the subset of a mathfield the "Insert Matrix" and "Insert" menus
+ * need, so they can also be shown from the virtual keyboard (which may not
+ * have direct access to the mathfield)
+ */
+export type InsertMenuTarget = Pick<
+  _Mathfield,
+  'insert' | 'isSelectionEditable'
+>;
+
+export function getInsertMenuItems(mf: InsertMenuTarget): MenuItem[] {
+  return [
+    {
+      label: () => localize('menu.insert matrix')!,
+      id: 'insert-matrix',
+      visible: () => mf.isSelectionEditable,
+      submenu: getInsertMatrixSubmenu(mf),
+      submenuClass: 'insert-matrix-submenu',
+      columnCount: 5,
+    },
+    {
+      type: 'divider',
+    },
+    {
+      label: () => localize('menu.insert')!,
+      id: 'insert',
+      submenu: insertMenu(mf),
+    },
+  ];
 }
 
 export function getDefaultMenuItems(mf: _Mathfield): MenuItem[] {
@@ -468,22 +499,7 @@ export function getDefaultMenuItems(mf: _Mathfield): MenuItem[] {
     {
       type: 'divider',
     },
-    {
-      label: () => localize('menu.insert matrix')!,
-      id: 'insert-matrix',
-      visible: () => mf.isSelectionEditable,
-      submenu: getInsertMatrixSubmenu(mf),
-      submenuClass: 'insert-matrix-submenu',
-      columnCount: 5,
-    },
-    {
-      type: 'divider',
-    },
-    {
-      label: () => localize('menu.insert')!,
-      id: 'insert',
-      submenu: insertMenu(mf),
-    },
+    ...getInsertMenuItems(mf),
     {
       type: 'divider',
     },
@@ -730,7 +746,7 @@ function variantStyleMenuItem(
   };
 }
 
-function insertMenu(mf: _Mathfield): MenuItem[] {
+function insertMenu(mf: InsertMenuTarget): MenuItem[] {
   return [
     {
       label: () => insertLabel('abs'),

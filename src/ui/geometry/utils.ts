@@ -171,7 +171,9 @@ export function fitInViewport(
         options.verticalPos,
         dir
       );
-      if (left + width > window.innerWidth - 8) left = undefined;
+      // Kedyou: the alternate location can also overflow on the left, e.g.
+      // a submenu of a menu near the right edge of a narrow screen
+      if (left < 8 || left + width > window.innerWidth - 8) left = undefined;
     } else left = undefined;
   }
 

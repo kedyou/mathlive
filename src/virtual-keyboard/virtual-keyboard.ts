@@ -35,6 +35,7 @@ import {
 } from './utils';
 
 import { hideVariantsPanel, showVariantsPanel } from './variants';
+import { hideInsertMenu } from './insert-menu';
 import { Style } from '../public/core-types';
 import { deepActiveElement } from '../ui/events/utils';
 import { _Mathfield } from 'editor-mathfield/mathfield-private';
@@ -413,6 +414,7 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
 
       // By the time the handler is called, the _element may have been destroyed
       if (this._element) {
+        hideInsertMenu();
         this._element.remove();
         this._element = undefined;
       }
@@ -557,6 +559,7 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
       window.removeEventListener('keyup', this, { capture: true });
       window.removeEventListener('contextmenu', this, { capture: true });
       hideVariantsPanel();
+      hideInsertMenu();
 
       releaseStylesheets();
 
