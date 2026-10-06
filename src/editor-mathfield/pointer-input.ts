@@ -67,12 +67,24 @@ function isPointerEvent(evt: Event | null): evt is PointerEvent {
   );
 }
 
+function pointInRect(x: number, y: number, rect: DOMRect): boolean {
+  return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  if (value < min) return min;
+  if (value > max) return max;
+  return value;
+}
+
 export function onPointerDown(mathfield: _Mathfield, evt: PointerEvent): void {
   // If a mouse button other than the main one was pressed, return.
   if (evt.buttons > 1) return;
 
-  //Reset the atom bounds cache
-  mathfield.atomBoundsCache = new Map<string, Rect>();
+  // Initialize the atom bounds cache if it doesn't exist
+  if (!mathfield.atomBoundsCache)
+    mathfield.atomBoundsCache = new Map<string, Rect>();
+  else mathfield.atomBoundsCache.clear();
 
   const that = mathfield;
   let anchor: Offset;
@@ -169,22 +181,47 @@ export function onPointerDown(mathfield: _Mathfield, evt: PointerEvent): void {
   }
 
   const bounds = field.getBoundingClientRect();
-  if (
-    anchorX >= bounds.left &&
-    anchorX <= bounds.right &&
-    anchorY >= bounds.top &&
-    anchorY <= bounds.bottom
-  ) {
+  const containerBounds =
+    mathfield.container?.getBoundingClientRect() ??
+    mathfield.element.getBoundingClientRect();
+  const hostBounds =
+    mathfield.element?.getBoundingClientRect() ?? containerBounds;
+  const anchorInsideField = pointInRect(anchorX, anchorY, bounds);
+  const anchorInsideContainer =
+    !anchorInsideField && containerBounds
+      ? pointInRect(anchorX, anchorY, containerBounds)
+      : false;
+  const anchorInsideHost =
+    !anchorInsideField && !anchorInsideContainer && hostBounds
+      ? pointInRect(anchorX, anchorY, hostBounds)
+      : false;
+  const selectionAnchorX = anchorInsideField
+    ? anchorX
+    : anchorInsideContainer || anchorInsideHost
+      ? clamp(anchorX, bounds.left, bounds.right)
+      : anchorX;
+  const selectionAnchorY = anchorInsideField
+    ? anchorY
+    : anchorInsideContainer || anchorInsideHost
+      ? clamp(anchorY, bounds.top, bounds.bottom)
+      : anchorY;
+
+  if (anchorInsideField || anchorInsideContainer || anchorInsideHost) {
     // Clicking or tapping the field resets the keystroke buffer
     mathfield.flushInlineShortcutBuffer();
 
-    anchor = offsetFromPoint(mathfield, anchorX, anchorY, {
+    anchor = offsetFromPoint(mathfield, selectionAnchorX, selectionAnchorY, {
       bias: 0,
     });
 
     // Reset the style bias if the anchor is different
+    // However, preserve explicit variantStyle settings to allow toggling
     if (anchor !== mathfield.model.anchor) {
-      mathfield.defaultStyle = {};
+      const preservedVariantStyle = mathfield.defaultStyle.variantStyle;
+      mathfield.defaultStyle =
+        preservedVariantStyle !== undefined
+          ? { variantStyle: preservedVariantStyle }
+          : {};
       mathfield.styleBias = 'left';
     }
 
@@ -201,18 +238,59 @@ export function onPointerDown(mathfield: _Mathfield, evt: PointerEvent): void {
         if (acceptCommandSuggestion(mathfield.model) || wasCollapsed)
           dirty = 'all';
         else dirty = 'selection';
-      } else if (mathfield.model.at(anchor).type === 'placeholder') {
-        mathfield.model.setSelection(anchor - 1, anchor);
+      } else if (
+        mathfield.model.at(anchor).type === 'placeholder' ||
+        mathfield.model.at(anchor).type === 'prompt'
+      ) {
+        // Position cursor inside the prompt/placeholder body
+        const atom = mathfield.model.at(anchor);
+        if (atom.hasChildren && atom.firstChild)
+          mathfield.model.position = mathfield.model.offsetOf(atom.firstChild);
+        else mathfield.model.setSelection(anchor - 1, anchor);
+
         dirty = 'selection';
       } else if (
-        mathfield.model.at(anchor).rightSibling?.type === 'placeholder'
+        mathfield.model.at(anchor).rightSibling?.type === 'placeholder' ||
+        mathfield.model.at(anchor).rightSibling?.type === 'prompt'
       ) {
-        mathfield.model.setSelection(anchor, anchor + 1);
+        // Position cursor inside the prompt/placeholder body
+        const atom = mathfield.model.at(anchor).rightSibling!;
+        if (atom.hasChildren && atom.firstChild)
+          mathfield.model.position = mathfield.model.offsetOf(atom.firstChild);
+        else mathfield.model.setSelection(anchor, anchor + 1);
+
         dirty = 'selection';
       } else {
-        mathfield.model.position = anchor;
-        if (acceptCommandSuggestion(mathfield.model)) dirty = 'all';
-        else dirty = 'selection';
+        // Check if this atom has captureSelection and contains a single
+        // placeholder/prompt child - if so, position inside that child
+        const atom = mathfield.model.at(anchor);
+        if (
+          atom.captureSelection &&
+          atom.hasChildren &&
+          atom.body &&
+          atom.body.length > 0
+        ) {
+          const bodyAtom = atom.body.find((a) => a.type !== 'first');
+          if (
+            bodyAtom &&
+            (bodyAtom.type === 'placeholder' || bodyAtom.type === 'prompt') &&
+            bodyAtom.hasChildren &&
+            bodyAtom.firstChild
+          ) {
+            mathfield.model.position = mathfield.model.offsetOf(
+              bodyAtom.firstChild
+            );
+            dirty = 'selection';
+          } else {
+            mathfield.model.position = anchor;
+            if (acceptCommandSuggestion(mathfield.model)) dirty = 'all';
+            else dirty = 'selection';
+          }
+        } else {
+          mathfield.model.position = anchor;
+          if (acceptCommandSuggestion(mathfield.model)) dirty = 'all';
+          else dirty = 'selection';
+        }
       }
 
       // `evt.detail` contains the number of consecutive clicks
@@ -245,7 +323,10 @@ export function onPointerDown(mathfield: _Mathfield, evt: PointerEvent): void {
     // logic on what to do on focus may depend on the selection)
     if (!mathfield.hasFocus()) {
       dirty = 'none'; // focus() will refresh
-      mathfield.focus({ preventScroll: true });
+      // Call onFocus to focus the keyboard delegate
+      // Events will fire normally
+      mathfield.onFocus();
+      mathfield.model.announce('line');
     }
   } else gLastTap = null;
 
@@ -293,27 +374,76 @@ function nearestAtomFromPointRecursive(
   // Do we have an array of cells?
   //
   if (atom instanceof ArrayAtom) {
-    // Find a matching cell, row by row
-    for (const row of atom.rows) {
+    // For arrays, we need to determine which row was clicked first
+    // to avoid selecting atoms from the wrong row (fixes #2619)
+    let targetRowIndex = -1;
+    let minRowDistance = Infinity;
+
+    // Find which row the click point is closest to vertically
+    for (let rowIndex = 0; rowIndex < atom.rows.length; rowIndex++) {
+      const row = atom.rows[rowIndex];
+      if (!row || row.length === 0) continue;
+
+      // Get bounds of all atoms in this row
+      let rowTop = Infinity;
+      let rowBottom = -Infinity;
+
       for (const cell of row) {
-        const cellRange: Range = [
-          model.offsetOf(cell![0]!),
-          model.offsetOf(cell![cell!.length - 1]!),
-        ];
-        const r = getRangeBoundingRect(mathfield, cellRange);
-        // Is the y within the vertical bounds of the row?
-        if (y >= r.top && y <= r.bottom) {
-          for (const atom of cell!) {
-            const r = nearestAtomFromPointRecursive(
+        if (cell) {
+          for (const atom2 of cell) {
+            const atomBounds = getAtomBounds(mathfield, atom2);
+            if (atomBounds) {
+              rowTop = Math.min(rowTop, atomBounds.top);
+              rowBottom = Math.max(rowBottom, atomBounds.bottom);
+            }
+          }
+        }
+      }
+
+      // Calculate vertical distance from click point to this row
+      if (rowTop !== Infinity && rowBottom !== -Infinity) {
+        let rowDistance: number;
+        if (y < rowTop) rowDistance = rowTop - y;
+        else if (y > rowBottom) rowDistance = y - rowBottom;
+        else {
+          // Point is within the row's vertical bounds
+          rowDistance = 0;
+        }
+
+        if (rowDistance < minRowDistance) {
+          minRowDistance = rowDistance;
+          targetRowIndex = rowIndex;
+        }
+      }
+    }
+
+    // Search only in the target row, or all rows if we couldn't determine a target
+    const rowsToSearch =
+      targetRowIndex >= 0 ? [atom.rows[targetRowIndex]] : atom.rows;
+
+    for (const row of rowsToSearch) {
+      for (const cell of row) {
+        if (cell) {
+          for (const atom2 of cell) {
+            const r2 = nearestAtomFromPointRecursive(
               mathfield,
               cache,
-              atom,
+              atom2,
               x,
               y
             );
-            if (r[0] <= result[0]) result = r;
+            if (r2[0] <= result[0]) result = r2;
           }
         }
+      }
+    }
+
+    // Search children for additional atoms (like delimiters)
+    // For multiline arrays, skip this to avoid selecting atoms from wrong rows
+    if (!atom.isMultiline) {
+      for (const child of atom.children) {
+        const r = nearestAtomFromPointRecursive(mathfield, cache, child, x, y);
+        if (r[0] <= result[0]) result = r;
       }
     }
   } else if (
@@ -329,24 +459,23 @@ function nearestAtomFromPointRecursive(
       if (r[0] <= result[0]) result = r;
     }
 
-    // Find a matching branch
-    // for (const branch of atom.branches) {
-    //   const siblings = atom.branch(branch);
-    //   if (!siblings || siblings.length === 0) continue;
-    //   const siblingsRange: Range = [
-    //     model.offsetOf(siblings[0]),
-    //     model.offsetOf(siblings[siblings.length - 1]),
-    //   ];
-    //   const r = getRangeBoundingRect(mathfield, siblingsRange);
-    //   // Is the y within the vertical bounds of the branch?
-    //   if (y >= r.top && y <= r.bottom) {
-    //     console.log(branch, r);
-    //     for (const atom of siblings) {
-    //       const r = nearestAtomFromPointRecursive(mathfield, cache, atom, x, y);
-    //       if (r[0] <= result[0]) result = r;
-    //     }
-    //   }
-    // }
+    // Find a matching branch - enhanced script branch searching
+    for (const branch of atom.branches) {
+      const siblings = atom.branch(branch);
+      if (!siblings || siblings.length === 0) continue;
+      const siblingsRange: Range = [
+        model.offsetOf(siblings[0]),
+        model.offsetOf(siblings[siblings.length - 1]),
+      ];
+      const r = getRangeBoundingRect(mathfield, siblingsRange);
+      // Is the y within the vertical bounds of the branch?
+      if (y >= r.top && y <= r.bottom) {
+        for (const atom of siblings) {
+          const r = nearestAtomFromPointRecursive(mathfield, cache, atom, x, y);
+          if (r[0] <= result[0]) result = r;
+        }
+      }
+    }
   }
 
   //
@@ -428,7 +557,9 @@ export function offsetFromPoint(
   // 4/ Account for the desired bias
   //
   if (atom.leftSibling) {
-    if (options.bias === 0 && atom.type !== 'placeholder') {
+    const skipMidlineBias =
+      atom.type === 'placeholder' || atom.type === 'prompt';
+    if (options.bias === 0 && !skipMidlineBias) {
       // If the point clicked is to the left of the vertical midline,
       // adjust the offset to *before* the atom (i.e. after the
       // preceding atom)

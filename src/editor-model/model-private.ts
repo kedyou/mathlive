@@ -112,7 +112,7 @@ export class _Model implements Model {
     this.silenceNotifications = wasSuppressing;
   }
 
-  get atoms(): Readonly<Atom[]> {
+  get atoms(): readonly Atom[] {
     return this.root.children;
   }
 
@@ -183,12 +183,23 @@ export class _Model implements Model {
       // 2b/ Determine the anchor and position
       // (smallest, largest offsets, oriented as per `direction`)
       //
-      const selRange = range(value);
+      let selRange = range(value);
+      selRange = includeAttachedSubsup(this, selRange);
       if (value.direction === 'backward')
         [this._position, this._anchor] = selRange;
       else [this._anchor, this._position] = selRange;
 
-      const first = this.at(selRange[0] + 1);
+      let firstIndex = selRange[0] + 1;
+      while (
+        firstIndex <= this.lastOffset &&
+        this.at(firstIndex)?.type === 'first' &&
+        firstIndex < selRange[1]
+      )
+        firstIndex += 1;
+      const first =
+        firstIndex <= this.lastOffset
+          ? this.at(firstIndex)
+          : this.at(selRange[1]);
       const last = this.at(selRange[1]);
 
       const commonAncestor = Atom.commonAncestor(first, last);
@@ -321,7 +332,7 @@ export class _Model implements Model {
 
     while (atom && atom.parent?.type !== 'array') atom = atom.parent;
 
-    if (!atom?.parent || atom.parent.type !== 'array') return undefined;
+    if (atom?.parent?.type !== 'array') return undefined;
 
     return [this.offsetOf(atom.firstSibling), this.offsetOf(atom.lastSibling)];
   }
@@ -336,18 +347,18 @@ export class _Model implements Model {
    * Note that an atom with children is included in the result only if
    * all its children are in range.
    */
-  getAtoms(arg: Selection, options?: GetAtomOptions): ReadonlyArray<Atom>;
-  getAtoms(arg: Range, options?: GetAtomOptions): ReadonlyArray<Atom>;
+  getAtoms(arg: Selection, options?: GetAtomOptions): readonly Atom[];
+  getAtoms(arg: Range, options?: GetAtomOptions): readonly Atom[];
   getAtoms(
     from: Offset,
     to?: Offset,
     options?: GetAtomOptions
-  ): ReadonlyArray<Atom>;
+  ): readonly Atom[];
   getAtoms(
     arg1: Selection | Range | Offset,
     arg2?: Offset | GetAtomOptions,
     arg3?: GetAtomOptions
-  ): ReadonlyArray<Atom> {
+  ): readonly Atom[] {
     let options = arg3 ?? {};
     if (isSelection(arg1)) {
       options = (arg2 as GetAtomOptions) ?? {};
@@ -369,7 +380,11 @@ export class _Model implements Model {
       end = arg2;
     } else {
       [start, end] = arg1;
-      options = (arg2 as GetAtomOptions) ?? {};
+      // Don't reassign options if it was already set from a Selection.
+      // This preserves options like includeFirstAtoms when a Selection is
+      // converted to a Range above.
+      if (Object.keys(options).length === 0)
+        options = (arg2 as GetAtomOptions) ?? {};
     }
 
     if (!Number.isFinite(start)) return [];
@@ -378,8 +393,16 @@ export class _Model implements Model {
 
     if (start < 0) start = this.lastOffset - start + 1;
     if (end < 0) end = this.lastOffset + end + 1;
-    const first = Math.min(start, end) + 1;
-    const last = Math.max(start, end);
+
+    // Convert selection positions to atom offsets.
+    // Position 0 is before the first atom, position 1 is after the first atom, etc.
+    // A selection [0, 1] should include atoms at offsets 0 and 1.
+    // Special case: when selection starts at position 0, include offset 0 (typically
+    // the first 'first' atom in structures like multiline arrays).
+    const minPos = Math.min(start, end);
+    const maxPos = Math.max(start, end);
+    const first = minPos === 0 ? 0 : minPos + 1;
+    const last = maxPos;
 
     // If this is the entire selection, return the root
     if (!options.includeChildren && first === 1 && last === this.lastOffset)
@@ -388,7 +411,8 @@ export class _Model implements Model {
     let result: Atom[] = [];
     for (let i = first; i <= last; i++) {
       const atom = this.atoms[i];
-      if (atomIsInRange(this, atom, first, last)) result.push(atom);
+      if (atomIsInRange(this, atom, first, last, options.includeFirstAtoms))
+        result.push(atom);
     }
 
     if (!options.includeChildren) {
@@ -397,7 +421,13 @@ export class _Model implements Model {
         let ancestorIncluded = false;
         let { parent } = atom;
         while (parent && !ancestorIncluded) {
-          ancestorIncluded = atomIsInRange(this, parent, first, last);
+          ancestorIncluded = atomIsInRange(
+            this,
+            parent,
+            first,
+            last,
+            options.includeFirstAtoms
+          );
           parent = parent.parent;
         }
 
@@ -451,11 +481,10 @@ export class _Model implements Model {
       // delete all the children of the root.
       if (result[0].isRoot) {
         // If the root is an array, get the cells
-        if (result[0] instanceof ArrayAtom) {
+        if (result[0] instanceof ArrayAtom)
           result = result[0]!.rows.flatMap((x) => x.flatMap((y) => y!));
-        } else {
-          result = [...(result[0].body ?? result[0].children)];
-        }
+        else result = [...(result[0].body ?? result[0].children)];
+
         result = result.filter((x) => x.type !== 'first');
       }
     }
@@ -466,6 +495,14 @@ export class _Model implements Model {
   deleteAtoms(range?: Range): void {
     range ??= [0, -1];
     this.extractAtoms(range);
+
+    // When deleting all content from an ArrayAtom root, reset it to a single
+    // empty row to avoid keeping the large multi-row structure
+    if (range[0] === 0 && range[1] === -1 && this.root instanceof ArrayAtom) {
+      // Remove all rows except the first one
+      while (this.root.rowCount > 1) this.root.removeRow(1);
+    }
+
     this.position = range[0];
   }
 
@@ -540,8 +577,7 @@ export class _Model implements Model {
     if (arg1 === undefined) return this.atomToString(this.root, 'latex');
 
     // GetValue(format): Output format only
-    if (typeof arg1 === 'string' && arg1 !== 'math-json')
-      return this.atomToString(this.root, arg1);
+    if (typeof arg1 === 'string') return this.atomToString(this.root, arg1);
 
     let ranges: Range[];
     let format: OutputFormat;
@@ -556,28 +592,10 @@ export class _Model implements Model {
       format = arg2 as OutputFormat;
     } else {
       ranges = [this.normalizeRange([0, -1])];
-      format = arg1 as OutputFormat;
+      format = 'latex';
     }
 
     format ??= 'latex';
-
-    if (format === 'math-json') {
-      if (!globalThis.MathfieldElement.computeEngine) {
-        if (!window[Symbol.for('io.cortexjs.compute-engine')]) {
-          console.error(
-            'The CortexJS Compute Engine library is not available.\nLoad the library, for example with:\nimport "https://esm.run/@cortex-js/compute-engine"'
-          );
-        }
-        return '["Error", "compute-engine-not-available"]';
-      }
-      const latex = this.getValue({ ranges }, 'latex-unstyled');
-      try {
-        const expr = globalThis.MathfieldElement.computeEngine.parse(latex);
-        return JSON.stringify(expr.json);
-      } catch (e) {
-        return JSON.stringify(['Error', `'${e.toString()}'`]);
-      }
-    }
 
     if (format.startsWith('latex')) {
       const options: ToLatexOptions = {
@@ -619,38 +637,52 @@ export class _Model implements Model {
       let [start, end] = range;
 
       // Include the parent if all the children are selected
+      // But not for container atoms that are typically used as arguments
+      // (e.g., surd, leftright) as this causes issues when inserting
+      // operations on the selection (see #2799)
+      const expandableTypes = new Set([
+        'genfrac',
+        'subsup',
+        'accent',
+        'box',
+        'overlap',
+        'overunder',
+      ]);
+
       let { parent } = this.at(end);
-      if (parent) {
-        if (parent.type === 'genfrac' || parent.type === 'subsup') {
-          while (
-            parent !== this.root &&
-            childrenInRange(this, parent!, [start, end])
-          ) {
-            end = this.offsetOf(parent!);
-            parent = parent!.parent;
-          }
+      if (parent?.type && expandableTypes.has(parent.type)) {
+        while (
+          parent?.type &&
+          expandableTypes.has(parent.type) &&
+          childrenInRange(this, parent, [start, end])
+        ) {
+          end = this.offsetOf(parent);
+          parent = parent.parent;
         }
       }
+
       parent = this.at(start).parent;
       while (
-        parent !== this.root &&
-        childrenInRange(this, parent!, [start, end])
+        parent?.type &&
+        expandableTypes.has(parent.type) &&
+        childrenInRange(this, parent, [start, end])
       ) {
-        start = this.offsetOf(parent!.leftSibling);
-        parent = parent!.parent;
+        start = this.offsetOf(parent.leftSibling);
+        parent = parent.parent;
       }
 
       // Now that the start has potentially changed, check again
       // if end needs to be updated
       parent = this.at(end).parent;
-      if (parent?.type === 'genfrac') {
+      if (parent?.type && expandableTypes.has(parent.type)) {
         while (
-          parent !== this.root &&
-          childrenInRange(this, parent!, [start, end])
+          parent?.type &&
+          expandableTypes.has(parent.type) &&
+          childrenInRange(this, parent, [start, end])
         ) {
-          end = this.offsetOf(parent!);
+          end = this.offsetOf(parent);
           console.assert(end >= 0);
-          parent = parent!.parent;
+          parent = parent.parent;
         }
       }
       this._position = this.normalizeOffset(position);
@@ -671,14 +703,14 @@ export class _Model implements Model {
    *
    * This method should not be called from other methods of the model
    * (such as `setSelection`) as these methods can also be called
-   * programmatically and a feedback in these case would be innapropriate,
+   * programmatically and a feedback in these case would be inappropriate,
    * however they should be called from functions called as a result of a user
    * action, such as the functions in `commands.ts`
    */
   announce(
     command: AnnounceVerb,
     previousPosition?: number,
-    atoms: Readonly<Atom[]> = []
+    atoms: readonly Atom[] = []
   ): void {
     const success =
       this.mathfield.host?.dispatchEvent(
@@ -815,7 +847,7 @@ export class _Model implements Model {
 
     while (atom && atom.parent?.type !== 'array') atom = atom.parent;
 
-    if (!atom?.parent || atom.parent.type !== 'array') return undefined;
+    if (atom?.parent?.type !== 'array') return undefined;
 
     return atom.parentBranch as [number, number];
   }
@@ -835,8 +867,7 @@ export class _Model implements Model {
   contentDidChange(options: ContentChangeOptions): void {
     if (window.mathVirtualKeyboard.visible)
       window.mathVirtualKeyboard.update(makeProxy(this.mathfield));
-    if (this.silenceNotifications || !this.mathfield || !this.mathfield.host)
-      return;
+    if (this.silenceNotifications || !this.mathfield?.host) return;
 
     const save = this.silenceNotifications;
     this.silenceNotifications = true;
@@ -882,20 +913,38 @@ export class _Model implements Model {
   }
 }
 
+/**
+ * Check if an atom is within the specified offset range.
+ * @param includeFirstAtoms - If true, include 'first' atoms which are normally
+ *   filtered out. Needed for rendering when all atoms (including 'first' atoms
+ *   in empty array cells) need to have their selection state set.
+ */
 function atomIsInRange(
   model: _Model,
   atom: Atom,
   first: Offset,
-  last: Offset
+  last: Offset,
+  includeFirstAtoms?: boolean
 ): boolean {
   const offset = model.offsetOf(atom);
   if (offset < first || offset > last) return false;
 
   if (!atom.hasChildren) return true;
 
-  const firstOffset = model.offsetOf(atom.firstChild);
+  // For atoms with children, check if their first and last children are in range.
+  // When includeFirstAtoms is true, use all children; otherwise skip 'first' atoms.
+  const firstChild = includeFirstAtoms
+    ? atom.firstChild
+    : firstNonFirstChild(atom);
+  if (!firstChild) return true;
+  const lastChild = includeFirstAtoms
+    ? atom.lastChild
+    : lastNonFirstChild(atom);
+  if (!lastChild) return true;
+
+  const firstOffset = model.offsetOf(firstChild);
   if (firstOffset >= first && firstOffset <= last) {
-    const lastOffset = model.offsetOf(atom.lastChild);
+    const lastOffset = model.offsetOf(lastChild);
     if (lastOffset >= first && lastOffset <= last) return true;
   }
 
@@ -905,10 +954,54 @@ function atomIsInRange(
 function childrenInRange(model: _Model, atom: Atom, range: Range): boolean {
   if (!atom?.hasChildren) return false;
   const [start, end] = range;
-  const first = model.offsetOf(atom.firstChild);
-  const last = model.offsetOf(atom.lastChild);
+  const firstChild = firstNonFirstChild(atom);
+  if (!firstChild) return false;
+  const lastChild = lastNonFirstChild(atom);
+  if (!lastChild) return false;
+
+  const first = model.offsetOf(firstChild);
+  const last = model.offsetOf(lastChild);
   if (first >= start && first <= end && last >= first && last <= end)
     return true;
 
   return false;
+}
+
+function includeAttachedSubsup(model: _Model, range: Range): Range {
+  let [start, end] = range;
+  const candidateOffset = end + 1;
+  if (candidateOffset > model.lastOffset) return range;
+
+  const candidate = model.at(candidateOffset);
+  if (shouldAttachSubsup(model, candidate, start, end))
+    end = model.offsetOf(candidate);
+
+  return [start, end];
+}
+
+function shouldAttachSubsup(
+  model: _Model,
+  atom: Atom | undefined,
+  start: Offset,
+  end: Offset
+): atom is Atom {
+  if (atom?.type !== 'subsup') return false;
+  if (!childrenInRange(model, atom, [start, end])) return false;
+  const base = atom.leftSibling;
+  if (!base) return false;
+  const baseOffset = model.offsetOf(base);
+  return baseOffset > start && baseOffset <= end;
+}
+
+function firstNonFirstChild(atom: Atom): Atom | undefined {
+  for (const child of atom.children) if (child.type !== 'first') return child;
+  return undefined;
+}
+
+function lastNonFirstChild(atom: Atom): Atom | undefined {
+  const { children } = atom;
+  for (let i = children.length - 1; i >= 0; i--)
+    if (children[i].type !== 'first') return children[i];
+
+  return undefined;
 }

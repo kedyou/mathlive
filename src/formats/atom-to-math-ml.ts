@@ -24,7 +24,9 @@ const INVISIBLE_TIMES = '<mo>&#8290;</mo>';
 function xmlEscape(string: string): string {
   return (
     string
-      // .replace(/&/g, '&amp;')
+      // `&` must be escaped first so the entities introduced below aren't
+      // double-escaped.
+      .replace(/&/g, '&amp;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;')
       .replace(/</g, '&lt;')
@@ -273,7 +275,7 @@ function scanText(stream: MathMLStream, final: number, options) {
     mathML = `<mtext ${makeID(
       stream.atoms[initial].id,
       options
-    )}>${mathML}</mtext>`;
+    )}>${xmlEscape(mathML)}</mtext>`;
 
     if (superscript < 0 && isSuperscriptAtom(stream)) {
       superscript = stream.index;
@@ -515,7 +517,7 @@ function scanOperator(stream: MathMLStream, final: number, options) {
  * @param final last index of the input to stop conversion to
  */
 export function toMathML(
-  input: number | boolean | string | Atom | Readonly<Atom[]> | undefined,
+  input: number | boolean | string | Atom | readonly Atom[] | undefined,
   options?: { generateID?: boolean },
   initial?: number,
   final?: number
@@ -608,7 +610,7 @@ function toString(atoms) {
  */
 function atomToMathML(atom: Atom, options: { generateID?: boolean }): string {
   if (atom.mode === 'text')
-    return `<mi${makeID(atom.id, options)}>${atom.value}</mi>`;
+    return `<mi${makeID(atom.id, options)}>${xmlEscape(atom.value)}</mi>`;
 
   // For named SVG atoms, map to a Unicode char
   const SVG_CODE_POINTS = {
@@ -724,6 +726,16 @@ function atomToMathML(atom: Atom, options: { generateID?: boolean }): string {
   switch (atom.type) {
     case 'first':
       break; // Nothing to do
+    case 'error':
+      // Line breaks (\\) in multiline environments are represented by the table structure
+      // in MathML, so we don't need to output anything for them
+      if (atom.command === '\\\\') break;
+      // For other error atoms, wrap in merror
+      result = `<merror${makeID(atom.id, options)}>${toMathML(
+        atom.body,
+        options
+      )}</merror>`;
+      break;
     case 'group':
     case 'root':
       result = toMathML(atom.body, options);
@@ -736,9 +748,8 @@ function atomToMathML(atom: Atom, options: { generateID?: boolean }): string {
         (arrayAtom.rightDelim && arrayAtom.rightDelim !== '.')
       ) {
         result += '<mrow>';
-        if (arrayAtom.leftDelim && arrayAtom.leftDelim !== '.') {
-          result += `<mo>${SPECIAL_DELIMS[arrayAtom.leftDelim] || arrayAtom.leftDelim}</mo>`;
-        }
+        if (arrayAtom.leftDelim && arrayAtom.leftDelim !== '.')
+          result += `<mo>${xmlEscape(SPECIAL_DELIMS[arrayAtom.leftDelim] || arrayAtom.leftDelim)}</mo>`;
       }
 
       result += '<mtable';
@@ -772,9 +783,8 @@ function atomToMathML(atom: Atom, options: { generateID?: boolean }): string {
         (arrayAtom.leftDelim && arrayAtom.leftDelim !== '.') ||
         (arrayAtom.rightDelim && arrayAtom.rightDelim !== '.')
       ) {
-        if (arrayAtom.rightDelim && arrayAtom.rightDelim !== '.') {
-          result += `'<mo>${SPECIAL_DELIMS[arrayAtom.rightDelim!] || arrayAtom.rightDelim}</mo>`;
-        }
+        if (arrayAtom.rightDelim && arrayAtom.rightDelim !== '.')
+          result += `<mo>${xmlEscape(SPECIAL_DELIMS[arrayAtom.rightDelim!] || arrayAtom.rightDelim)}</mo>`;
 
         result += '</mrow>';
       }
@@ -790,7 +800,9 @@ function atomToMathML(atom: Atom, options: { generateID?: boolean }): string {
           '<mo' +
           makeID(atom.id, options) +
           '>' +
-          (SPECIAL_DELIMS[genfracAtom.leftDelim] || genfracAtom.leftDelim) +
+          xmlEscape(
+            SPECIAL_DELIMS[genfracAtom.leftDelim] || genfracAtom.leftDelim
+          ) +
           '</mo>';
       }
 
@@ -812,7 +824,9 @@ function atomToMathML(atom: Atom, options: { generateID?: boolean }): string {
           '<mo' +
           makeID(atom.id, options) +
           '>' +
-          (SPECIAL_DELIMS[genfracAtom.rightDelim] || genfracAtom.rightDelim) +
+          xmlEscape(
+            SPECIAL_DELIMS[genfracAtom.rightDelim] || genfracAtom.rightDelim
+          ) +
           '</mo>';
       }
 
@@ -839,18 +853,18 @@ function atomToMathML(atom: Atom, options: { generateID?: boolean }): string {
       const lDelim = leftrightAtom.leftDelim;
       result = '<mrow>';
       if (lDelim && lDelim !== '.') {
-        result += `<mo${makeID(atom.id, options)}>${
+        result += `<mo${makeID(atom.id, options)}>${xmlEscape(
           SPECIAL_DELIMS[lDelim] ?? lDelim
-        }</mo>`;
+        )}</mo>`;
       }
 
       if (atom.body) result += toMathML(atom.body, options);
 
       const rDelim = leftrightAtom.matchingRightDelim();
       if (rDelim && rDelim !== '.') {
-        result += `<mo${makeID(atom.id, options)}>${
+        result += `<mo${makeID(atom.id, options)}>${xmlEscape(
           SPECIAL_DELIMS[rDelim] ?? rDelim
-        }</mo>`;
+        )}</mo>`;
       }
 
       result += '</mrow>';
@@ -858,9 +872,9 @@ function atomToMathML(atom: Atom, options: { generateID?: boolean }): string {
 
     case 'sizeddelim':
     case 'delim':
-      result += `<mo${makeID(atom.id, options)}>${
+      result += `<mo${makeID(atom.id, options)}>${xmlEscape(
         SPECIAL_DELIMS[atom.value] || atom.value
-      }</mo>`;
+      )}</mo>`;
       break;
 
     case 'accent':
@@ -950,10 +964,9 @@ function atomToMathML(atom: Atom, options: { generateID?: boolean }): string {
         // This is an identifier with no special handling. Use the
         // Unicode value
         if (typeof atom.value === 'string' && atom.value.charCodeAt(0) > 255) {
-          result =
-            '&#x' +
-            ('000000' + atom.value.charCodeAt(0).toString(16)).slice(-4) +
-            ';';
+          // Emit the literal character; `xmlEscape()` (applied below) handles
+          // any escaping needed.
+          result = String.fromCodePoint(atom.value.codePointAt(0)!);
         } else if (typeof atom.value === 'string')
           result = atom.value.charAt(0);
       } else if (atom.command === '\\char') {
@@ -961,14 +974,15 @@ function atomToMathML(atom: Atom, options: { generateID?: boolean }): string {
         const val = atom.args?.[0] as LatexValue;
         if (val !== undefined && 'number' in val) {
           const codepoint = val.number;
-          if (typeof codepoint === 'number') {
-            result =
-              '&#x' + ('000000' + codepoint.toString(16)).slice(-4) + ';';
-          }
+          if (
+            typeof codepoint === 'number' &&
+            codepoint >= 0 &&
+            codepoint <= 0x10ffff
+          )
+            result = String.fromCodePoint(codepoint);
         }
-      } else if (typeof atom.value === 'string') {
-        result = atom.value;
-      } else {
+      } else if (typeof atom.value === 'string') result = atom.value;
+      else {
         console.error('Did not expect this');
         result = '';
       }
@@ -1114,13 +1128,19 @@ function atomToMathML(atom: Atom, options: { generateID?: boolean }): string {
       break;
     case 'latex':
       result +=
-        '<mtext' + makeID(atom.id, options) + '>' + atom.value + '</mtext>';
+        '<mtext' +
+        makeID(atom.id, options) +
+        '>' +
+        xmlEscape(atom.value) +
+        '</mtext>';
       break;
     case 'tooltip':
       result += toMathML(atom.body, options);
       break;
     case 'text':
-      result += `<mtext ${makeID(atom.id, options)}x>${atom.value}</mtext>`;
+      result += `<mtext ${makeID(atom.id, options)}x>${xmlEscape(
+        atom.value
+      )}</mtext>`;
       break;
     default:
       if (atom.command === '\\displaystyle') {

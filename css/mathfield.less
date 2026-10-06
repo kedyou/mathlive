@@ -26,14 +26,19 @@
   }
 }
 
+:host {
+  display: block;
+}
+
 // The .ML__container includes the visible parts of the math-field:
-// the .ML__content and the .ML__virtual-keyboard-toggle.
+// the .ML__content and the toggle buttons (wrapped in .ML__toggles).
 // .ML__container
 //      > .ML__content
 //            > .ML__latex > .ML__base
 //            > .ML__selection
-//      > .ML__virtual-keyboard-toggle
-//      > .ML__menu-toggle
+//      > .ML__toggles
+//            > .ML__virtual-keyboard-toggle
+//            > .ML__menu-toggle
 .ML__container {
   display: inline-flex;
   flex-flow: row;
@@ -43,7 +48,7 @@
   width: 100%;
   box-sizing: border-box;
 
-  /* This attribute is necessary to work around a Firefox issue where 
+  /* This attribute is necessary to work around a Firefox issue where
   where clicking multiple times on the border leads to a focused mathfield that cannot be edited until focus is lost and regained (also fixes the multiple cursor issue on firefox that can occur with the same sequence of events).
   */
   pointer-events: var(--pointer-events, auto);
@@ -193,6 +198,27 @@
   }
 }
 
+/* Container for the virtual keyboard toggle and menu toggle buttons */
+.ML__toggles {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0;
+  align-self: flex-start;
+}
+
+/* Vertical layout modifier */
+.ML__toggles--vertical {
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+
+  .ML__virtual-keyboard-toggle,
+  .ML__menu-toggle {
+    margin-right: 0;
+  }
+}
+
 .ML__virtual-keyboard-toggle,
 .ML__menu-toggle {
   box-sizing: border-box;
@@ -248,6 +274,7 @@
   resize: none;
   outline: none;
   border: none;
+  pointer-events: none;
 
   /* Need these for Microsoft Edge */
   position: fixed;
@@ -360,6 +387,25 @@ with this style */
 .ML__focused .ML__selected .ML__smart-fence__close,
 .ML__focused .ML__selected .ML__placeholder {
   color: var(--_selection-color);
+  opacity: 1;
+}
+
+.ML__empty-line-anchor::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 20px;
+  border-radius: 2px;
+  background: transparent;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ML__focused .ML__empty-line-anchor.ML__selected::after {
+  background: var(--_selection-background-color);
   opacity: 1;
 }
 
@@ -604,6 +650,7 @@ menu .ML__base {
 
   &.active {
     background: var(--neutral-100);
+    z-index: 1;
     scale: 1.4;
     & > .label > span {
       border-radius: 2px;

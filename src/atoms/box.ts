@@ -20,7 +20,7 @@ export class BoxAtom extends Atom {
 
   constructor(
     options: CreateAtomOptions & {
-      body: Readonly<Atom[]>;
+      body: readonly Atom[];
       framecolor?: LatexValue;
       backgroundcolor?: LatexValue;
       padding?: LatexValue;
@@ -106,7 +106,7 @@ export class BoxAtom extends Atom {
     if (this.backgroundcolor) {
       box.setStyle(
         'background-color',
-        context.toColor(this.backgroundcolor) ?? 'transparent'
+        context.toBackgroundColor(this.backgroundcolor) ?? 'transparent'
       );
     }
     if (this.framecolor) {

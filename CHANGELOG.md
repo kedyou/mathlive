@@ -1,5 +1,530 @@
 ## [Unreleased]
 
+### Breaking Changes
+
+- The `@cortex-js/compute-engine` package is no longer a dependency of
+  MathLive. The Compute Engine was never bundled with MathLive; it was only
+  used for its TypeScript types. If your application loads the Compute Engine
+  (for example with `import "https://esm.run/@cortex-js/compute-engine"`),
+  MathLive continues to pick it up from the global scope and
+  `MathfieldElement.computeEngine` still works, but it is now typed as `any`.
+  Applications that need the types should add the package to their own
+  dependencies.
+- The `mathfield.expression` getter and setter have been removed. Use
+  `MathfieldElement.computeEngine.parse(mf.getValue())` to obtain a boxed
+  expression, and `mf.setValue(expr.latex)` (or `mf.setValue(expr)`, which
+  still accepts a MathJSON object) to set one.
+- The `"math-json"` output format has been removed from `getValue()`. Use
+  `MathfieldElement.computeEngine.parse(mf.getValue()).json` instead.
+- The **Evaluate**, **Simplify** and **Solve** items have been removed from the
+  default context menu.
+
+## 0.110.0 _2026-06-08_
+
+### Security Advisories
+
+- **#3028** Fixed a cross-site scripting (XSS) vulnerability in the rendering of
+  text-mode content. The body of `\text{}`, `\mbox{}` and similar commands
+  accepts arbitrary characters, which were reflected **unescaped** into both the
+  HTML markup (`convertLatexToMarkup()`, the editor, and the `<math-span>` /
+  `<math-div>` static elements) and the MathML output
+  (`convertLatexToMathMl()`). Input such as
+  `\text{<img src=x onerror=alert(1)>}` could therefore execute arbitrary
+  JavaScript when the output was inserted into the DOM. Text content and
+  delimiters are now HTML-escaped in both output paths. Applications that render
+  untrusted LaTeX should upgrade.
+
+### Resolved Issues
+
+- **#2949** Fixed the layout of fill-in-the-blank prompts that contain content.
+  The prompt's outline box now correctly encloses and aligns with its content,
+  including tall content such as fractions, with improved vertical alignment.
+  This regression was introduced by the fix for **#2515**; note that **#2515**
+  (placeholders inside accent commands such as `\vec{}` cannot be filled)
+  remains unresolved and is tracked separately. (contributed by
+  @Scienthousiaste)
+
+- **#2963** Fixed font style (variant) changes being ignored for the first
+  character of an expression (or block). Applying a font style such as Roman
+  Upright to the first character now serializes correctly (e.g. `\mathrm{H}`
+  instead of a bare `H`), matching what is displayed in the mathfield.
+  (contributed by @psiservices-uwidmark)
+
+- **#2964** Fixed duplicate atoms accumulating when `setValue()` is called
+  repeatedly with incomplete LaTeX (such as `\sum_{`). Partially-formed atoms
+  that contain no content are now included when collecting atoms in a range, so
+  they are cleared on each sync instead of accumulating across update cycles.
+  (contributed by @Meinzzzz)
+
+- **#3030** Fixed TypeScript 6 compilation errors (TS2882) in the published type
+  declarations. The generated `.d.ts` files no longer contain bare side-effect
+  imports (such as `import '../core/modes'`) that referenced modules not
+  included in the package, which TypeScript 6 flags by default via
+  `noUncheckedSideEffectImports`.
+
+### Improvements
+
+- **#3032** `validateLatex()` now accepts an optional `options` argument with a
+  `macros` dictionary, so custom macros are recognized during validation instead
+  of being reported as unknown commands. (contributed by @Wigny)
+
+- **#3009** The types for static math elements are now exported from the package
+  entry point (`math-static-elements`), making them available to TypeScript
+  consumers. (contributed by @tsuji-riya)
+
+## 0.109.2 _2026-04-28_
+
+### Resolved Issues
+
+- **#2931** Fixed virtual keyboard recursion in sandboxed iframe mathfields. The
+  message handling guard now checks the `source` window rather than only the
+  top-level window, preventing the local mathfield from re-dispatching its own
+  command messages and avoiding the resulting infinite loop. (contributed by
+  @konbu310)
+
+- Fixed duplicated safe area padding below the virtual keyboard. The
+  `--_keyboard-height` calculation no longer adds `env(safe-area-inset-bottom)`
+  on top of `--_padding-bottom`, which already includes it; this removes the
+  doubled empty space that appeared below the keyboard on devices with bottom
+  safe areas. (contributed by @Blibbo)
+
+- Fixed a stacking issue in the color picker where the background of neighboring
+  color swatches could paint over the border of the active swatch. The focused
+  color now has an explicit `z-index` to keep it above its neighbors.
+  (contributed by @Blibbo)
+
+### Improvements
+
+- Added Catalan (`ca`) localization. (contributed by @aaronFortuno)
+
+## 0.109.1 _2026-04-01_
+
+### Resolved Issues
+
+- **#2974** Fixed empty/unresponsive mathfield after inserting a fraction
+  following a parenthesized expression built via keyboard (e.g.
+  `5 ) Home ( End /`). Also fixed a phantom duplicate caret that appeared after
+  the same input sequence. (contributed by @zojize)
+
+## 0.109.0 _2026-03-11_
+
+### Resolved Issues
+
+- **#2946** Fixed virtual keyboard toggle focus issues. Clicking the
+  `virtual-keyboard-toggle` button now correctly focuses the mathfield and
+  accepts virtual keyboard input. (contributed by @mgreminger)
+
+- **#2956** Fixed incorrect inter-atom spacing before relation operators (e.g.
+  `=`) when using accent commands like `\hat{x}`. (contributed by @repst)
+
+- **#2957** Fixed a caret trap in LaTeX command mode after deleting a lone
+  backslash. Empty `latexgroup` containers are now removed when delete
+  operations remove the last LaTeX atom. (contributed by @repst)
+
+- **#2958** Fixed smart-fence closing delimiter remaining in ghost styling after
+  pressing Space. The closing delimiter is now properly committed and rendered
+  normally. (contributed by @repst)
+
+- Fixed the caret getting trapped inside a LaTeX command group when navigating
+  with arrow keys. Pressing left or right arrow to move past the boundary of a
+  `\command` now correctly accepts the command and exits LaTeX mode.
+
+### Improvements
+
+- **#2935** Fixed Korean localization translation errors. (contributed by
+  @onu032001)
+
+- **#2938** Removed debug `console.log` from `PromptAtom`. (contributed by
+  @remiangot)
+
+- **#2726** Updated Italian localization with improved translations and
+  capitalization normalization. (contributed by @GGilli)
+
+## 0.108.3 _2026-02-11_
+
+### Resolved Issues
+
+- **#2906** Fixed a runtime error
+  (`undefined is not an object (evaluating 'this.ariaLiveText.textContent=""')`)
+  that occurred when the mathfield element could not be fully initialized (e.g.
+  in Vue runtime-only builds) or after the mathfield was disposed.
+
+## 0.108.2 _2025-11-13_
+
+### Resolved Issues
+
+- **#2899** Typing an inline shortcut immediately after inserting a structure
+  (e.g. `sin/cos`) now expands the shortcut correctly and keeps the caret in the
+  numerator placeholder. The inline shortcut buffer is flushed in place, so the
+  first character typed in a fresh placeholder is tracked again, and genfrac
+  insertion prioritizes the numerator placeholder before falling back to the
+  denominator. This fixes both the missing `\cos` expansion and the regression
+  where the denominator was erroneously selected after `/`.
+
+## 0.108.1 _2025-11-11_
+
+### New Features
+
+- **Responsive toggle button layout**: The virtual keyboard toggle and menu
+  button now automatically switch from horizontal (side-by-side) to vertical
+  (stacked) layout when the mathfield height is 100px or greater. This happens
+  dynamically as you add content to the mathfield.
+
+### Resolved Issues
+
+- Fixed virtual keyboard toggle requiring triple-click to activate.
+- **#2892** Fixed vertical alignment issues when using `\colorbox` with
+  expressions that have both subscripts and superscripts. Previously, applying a
+  background color to an expression like `N_{k}^{2019}` would cause the
+  subscripts and superscripts to be misaligned or shift upward. Colorboxes now
+  render correctly with proper baseline alignment regardless of whether the
+  content has only a subscript, only a superscript, or both.
+
+## 0.108.0 _2025-11-09_
+
+### New Features
+
+- Virtual keyboard keycaps now expose stable automation hooks. Each keycap
+  includes an `aria-label` and `data-keycap-value` alongside its serialized
+  command, allowing assistive tech and automated tests to target keys by their
+  semantic value instead of brittle glyph text. Playwright e2e tests were
+  updated to drive the keyboard using these attributes.
+- Added `<math-span>` and `<math-div>` web components for lightweight static
+  rendering of mathematical expressions. These components provide an alternative
+  to `renderMathInDocument()` with a simpler API and support for inline
+  (`<math-span>`) and block-level (`<math-div>`) formulas. They support LaTeX,
+  AsciiMath, and MathJSON input formats, and offer a `render()` method for
+  manual re-rendering.
+  - **Performance optimizations**: Lazy font loading (fonts load once globally),
+    Intersection Observer for deferred rendering (formulas render only when
+    visible)
+  - **Accessibility enhancements**: Auto-generated ARIA labels with speakable
+    text, MathML fallback for screen readers, keyboard navigation support when
+    focusable (Space/Enter to speak formula), automatic `role="img"` attribute
+- **#2732** Pressing the Space key in LaTeX mode now completes the LaTeX command
+  and exits LaTeX mode, similar to pressing Enter. Previously, users typing
+  LaTeX commands like `\alpha` would remain in LaTeX mode until pressing Enter,
+  and incomplete commands would be lost when dismissing dialogs. Now pressing
+  Space after a valid LaTeX command completes it and returns to math mode,
+  making LaTeX input more intuitive and preventing data loss. Additionally, when
+  typing LaTeX commands with mandatory arguments (like `\frac{1}{2}`), the
+  command now auto-completes and exits LaTeX mode when the closing brace of the
+  last mandatory argument is typed. The implementation uses the command registry
+  to determine the exact number of mandatory arguments, ensuring correct
+  behavior for all commands including those with nested arguments.
+- **#2786** Fixed scientific notation handling when creating fractions. When
+  typing scientific notation like `5e-2` or `3.14×10^{-2}` and then pressing `/`
+  to create a fraction, the entire expression now stays together in the
+  numerator instead of being split apart. Previously, only part of the number
+  would be included (e.g., just `2` from `5e-2`), breaking the scientific
+  notation. The fix recognizes both e-notation (`5e-2`, `3.14e+10`) and ×10^
+  notation (`3.14×10^{-2}`, `5×10^3`) as atomic units.
+- **Scientific notation template auto-formatting**. When typing scientific
+  notation in e-notation format (e.g., `3.14e2`, `5E-3`, `1.23e+10`), MathLive
+  now automatically formats it using a customizable template. The formatting is
+  triggered either when typing a non-digit character after the notation or after
+  a brief pause in typing (controlled by `inlineShortcutTimeout`). The template
+  is configured via the `scientificNotationTemplate` property (default:
+  `#1\times10^{#2}`) where `#1` is replaced with the significand and `#2` with
+  the exponent. For example, typing `3.14e2` followed by a space will
+  automatically format to `3.14×10²`. The feature respects the
+  `decimalSeparator` setting for internationalization.
+
+### Resolved Issues
+
+- Fixed click positioning in multiline environments. When clicking in a
+  multiline environment (such as `\displaylines`, `gather`, `align`, etc.), the
+  caret is now correctly positioned on the line that is closest to the click
+  point vertically, rather than selecting atoms from other lines based on
+  overall Euclidean distance. For example, when clicking horizontally below an
+  atom on line 1 but vertically at the level of line 2, the caret will now be
+  positioned on line 2 instead of incorrectly jumping to line 1. This fix
+  ensures that clicking in multiline content respects the visual line structure,
+  making editing more intuitive and predictable.
+- Fixed MathML serialization for multiline mathfields. Previously, serializing
+  multiline mathfields (such as `\displaylines{\\ }`) to MathML would result in
+  invalid MathML with syntax errors and console warnings. The fix corrects a
+  syntax error in array delimiter serialization and properly handles line break
+  (`\\`) atoms in multiline environments by skipping them (since line breaks are
+  represented by the `<mtr>` table structure in MathML, not by explicit line
+  break atoms).
+- **#2146** Fixed nested subscript and superscript creation when using physical
+  keyboard shortcuts (`Shift+-`, `Ctrl+-`). Previously, typing `a_b_` would
+  highlight `b` and reuse the outer subscript instead of creating a subscript of
+  `b`, and typing `a^b_` inside the exponent would unexpectedly attach the new
+  subscript to `a`. Script commands now attach to the atom that currently has
+  focus, so nested scripts work regardless of whether they are triggered by
+  synthetic text insertion or by real key combos.
+- **#2343** Fixed clipboard API errors when MathLive is used in sandboxed
+  iframes. Previously, when pasting content in a mathfield embedded in a
+  sandboxed iframe without `allow="clipboard-read; clipboard-write"`
+  permissions, unhandled promise rejections would appear in the console
+  ("Permissions policy violation: The Clipboard API has been blocked"). The
+  paste operation now gracefully handles clipboard API errors with appropriate
+  user feedback.
+- **#2364** Fixed `--keycap-height` CSS custom property not working in sandboxed
+  iframes. Previously, setting `--keycap-height` to custom values (e.g., 15px)
+  had no effect because responsive breakpoint queries were using `max()`
+  functions that enforced minimum height values. The custom property now
+  properly accepts any user-defined value while maintaining sensible defaults
+  (60px, 52px, 42px) when no custom value is provided.
+- **#2391** Fixed spacing for `\class`, `\cssId`, `\htmlId`, `\htmlData`,
+  `\htmlStyle`, and `\href` commands. These commands now properly respect
+  mathematical spacing rules, matching the behavior of similar commands like
+  `\textcolor`. Previously, expressions like `1=\class{test}{1}` would not have
+  proper spacing before the wrapped element, while `1=\textcolor{red}{1}` would.
+  The commands now create atoms with the correct type (`mord`) and use deferred
+  argument parsing to ensure proper inter-atom spacing.
+- **#2419** Fixed parsing of dollar-delimited math expressions when using
+  `insert()` in text mode. Previously, when inserting strings like
+  `"La fonction $f$ est croissante"` into a mathfield with `defaultMode="text"`,
+  the dollar signs and their content were being escaped, preventing proper math
+  mode switching. The text mode editor now correctly preserves math regions
+  delimited by `$...$` or `$$...$$` while only escaping special characters in
+  text regions, allowing mixed text and inline math expressions to be inserted
+  correctly.
+- **#2444** Font style menu items (roman, italic) are now always visible and
+  properly toggleable. Previously, these items only appeared when text was
+  selected, and toggling them when positioned after styled text would not work
+  on the first click. The toggle logic now correctly checks against the computed
+  insert style (including inherited styles from adjacent atoms) rather than just
+  the explicit default style, allowing users to easily toggle off font styles
+  like `\mathrm{}` (roman/upright).
+- **#2447** When deleting content in a subscript or superscript of operators
+  like `\lim`, the cursor would become trapped in the empty branch. Now, when
+  all content in a subscript/superscript is deleted and the delete key is
+  pressed again, the empty branch is removed and the cursor properly navigates
+  out, while keeping the operator itself intact.
+- **#2476** Readonly expressions can no longer be modified using the virtual
+  keyboard. Previously, when a mathfield was readonly or when the selection was
+  within a readonly portion (such as outside a prompt/placeholder in a
+  fill-in-the-blank scenario), typing on the virtual keyboard would incorrectly
+  replace or modify the readonly content. The virtual keyboard now respects
+  readonly protection, matching the behavior of the physical keyboard by playing
+  a "plonk" sound and rejecting the input.
+- **#2480** Fixed selection behavior within `\mathtip` and `\texttip` commands.
+  Previously, it was only possible to select the entire content of a mathtip at
+  once (e.g., all of `x+1` in `\mathtip{x+1}{test}`), even though navigation
+  with arrow keys worked correctly. Now partial selection within tooltip content
+  is properly supported, allowing users to select individual characters or
+  subexpressions. Additionally, the tooltip styling has been corrected to
+  properly display the background color, border, and shadow on hover.
+- **#2512** Fixed excessive blank space appearing above inline `array`
+  environments. The vertical alignment of arrays has been adjusted to align the
+  first row's baseline with surrounding text rather than centering the entire
+  array around the math axis, which was causing unwanted spacing above inline
+  arrays with column separators like
+  `\begin{array}{l|l} a & b\\ c & d\end{array}`.
+- **#2515** Fixed placeholders inside accent commands (`\vec{}`, `\bar{}`,
+  `\hat{}`, etc.) not being clickable. When clicking on a placeholder wrapped in
+  an accent command, the cursor now correctly positions inside the placeholder
+  instead of selecting the entire accent atom.
+- **#2521** Fixed the `/` shortcut misplacing subscripts when converting a
+  selection into a fraction. Previously, selecting a symbol with an attached
+  subscript, e.g. `d_0`, and pressing `/` would move only the base `d` into the
+  numerator and leave the orphaned `_0` attached to the denominator placeholder.
+  Selection normalization now automatically expands to include the associated
+  `subsup` atom so the scripted symbol stays intact inside the resulting
+  fraction.
+- **#2558** Fixed cursor jumping to the beginning when entering a left
+  parenthesis before a previously entered right parenthesis. When typing a
+  closing bracket first (e.g., `1+2+3)`), then moving the cursor back and typing
+  an opening bracket `(`, the smart fence feature would correctly create
+  `\left(2+3\right)` but would incorrectly position the cursor at the start of
+  the expression instead of after the opening parenthesis. The cursor now
+  properly stays positioned inside the newly created fence, right after the left
+  delimiter.
+- **#2547** Fixed rendering of `\colorbox` in fractions where the colored
+  background would obscure the fraction bar. The background is now rendered
+  behind the content using a CSS pseudo-element with `z-index: -1`, preventing
+  it from painting over adjacent elements like fraction bars. This issue
+  occurred specifically with double-braced content like
+  `\frac{{\colorbox{red}{344}}}{3}`.
+- **#2570** Fixed `\bf`, `\it`, and related text formatting commands not
+  accepting braced arguments. Previously, commands like `\bf{425}` would fail to
+  parse because the parser didn't handle braced arguments for `{:rest*}`
+  deferred parameters. Additionally, the rendering system wasn't properly
+  combining `fontFamily` with `fontSeries`/`fontShape` properties, causing
+  `\bf{425}` to render in regular weight instead of bold. The parser now
+  correctly handles braced arguments, and the `getFont()` method builds compound
+  variant keys (e.g., 'roman-bold') by combining these style properties.
+- **#2572** Fixed typing special characters in placeholders. When typing
+  characters with keybindings (like backslash, parentheses, brackets) in a
+  selected placeholder, the characters would disappear or trigger unwanted
+  behaviors. The placeholder is now deleted before keystroke processing,
+  allowing all keybindings and character handling to work correctly.
+- **#2579** Fixed multiple mathfields showing blinking cursors simultaneously
+  when `focus()` is called rapidly on multiple mathfields. This occurred because
+  Chromium browsers don't fire blur events reliably during rapid focus changes,
+  causing multiple mathfields to remain in a focused state. The fix implements
+  global focus tracking to ensure only one mathfield can be focused at a time,
+  explicitly blurring any previously focused mathfield when a new one gains
+  focus. This handles browser blur event quirks while maintaining backward
+  compatibility with all existing focus/blur behavior.
+- **#2619** Fixed placeholders in multi-row array environments (like
+  `\displaylines`) not being focusable with pointer clicks. The hit-testing
+  logic now properly determines which row was clicked before searching for
+  atoms, ensuring placeholders in different rows can be correctly selected.
+  Additionally, fixed prompt hit testing to include the full visual area
+  (including padding) and corrected cursor positioning to place the cursor
+  inside the prompt body rather than selecting around it.
+- **#2665** Clicking on a mathfield now only fires focus events once, instead of
+  generating duplicate focus/blur/focusin/focusout events.
+- **#2668** Fixed right-click context menu causing MathField to lose focus when
+  clicking on formatted text. Previously, right-clicking on equation text would
+  blur the field, potentially causing incorrect rendering when selecting menu
+  options like color changes. The context menu event is now prevented before
+  showing the menu, ensuring focus is maintained regardless of where the
+  right-click occurs.
+- **#2685** Fixed physical keyboard not working after programmatic focus with
+  manual virtual keyboard policy. When calling `mf.focus()` programmatically at
+  page load with `mathVirtualKeyboardPolicy: "manual"`, the physical keyboard
+  would stop working. This was caused by a double `onFocus()` invocation that
+  set up event capture listeners at the wrong time. The fix prevents the second
+  `onFocus()` call when focus is initiated programmatically, ensuring keyboard
+  events are properly routed.
+- **#2686** When deleting a range that includes special mathematical atoms like
+  `\sqrt`, `\frac`, or `\enclose`, the special atom structure is now properly
+  removed or cleaned up. Previously, deleting content would leave behind empty
+  special atom structures. Now, if a special atom becomes empty after deletion,
+  it is removed entirely. Additionally, when a deletion crosses the boundary of
+  a special atom (e.g., selecting content both outside and inside a square
+  root), any remaining content inside the special atom is hoisted out, and the
+  special atom structure is removed.
+- **#2698** Dispatched virtual keyboard events now include the standard `origin`
+  property when `mathVirtualKeyboardPolicy = "sandboxed"`. Previously, when
+  MathLive operated within an iframe in sandboxed mode, the MessageEvent objects
+  dispatched via `window.dispatchEvent()` were missing this property, causing
+  validation errors in environments that check for the origin domain.
+- **#2714** Disabled mathfields no longer receive focus or accept keyboard
+  input. Previously, clicking on or calling `.focus()` on a disabled mathfield
+  would trigger focus events and allow keyboard input like `{` and `/` to modify
+  the content, despite the documented behavior that disabled mathfields should
+  not be focusable. Disabled mathfields are now properly non-focusable,
+  preventing all focus events and keyboard input.
+- **#2728** Fixed missing spacer elements when using the `\class` command.
+  Previously, expressions like `x+\class{highlight}{y}+1` would not have proper
+  spacing before the styled content, causing the spacer element between the `+`
+  operator and the wrapped content to be missing. The `\class` command now uses
+  `boxType: 'lift'` to properly expose its contents to the inter-box spacing
+  algorithm, matching the behavior of similar styling commands like `\emph`.
+- **#2733** Fixed inline shortcut buffer persistence after deleting all content.
+  When typing characters that triggered an inline shortcut (e.g., "xx" →
+  "\times"), then deleting all content with Backspace, and typing again, the
+  stale shortcut buffer would incorrectly trigger shortcuts on new input. The
+  inline shortcut buffer is now properly flushed when the mathfield becomes
+  empty after a deletion operation.
+- **#2739** Fixed a crash when pressing Backspace on an empty `\displaylines`
+  environment. The error "Cannot read properties of undefined (reading
+  'length')" would occur when creating a multiline display (Cmd+Enter), deleting
+  all content, and pressing Backspace again. The row deletion logic now properly
+  handles empty cells and missing rows.
+- **#2754** Setting the `placeholder` property programmatically now works
+  correctly. Previously, `mathfield.placeholder = "text"` would not update the
+  placeholder. The property now follows the same pattern as all other properties
+  for consistent behavior.
+- **#2767** When calling `getValue()` on a mathfield in multiline mode with a
+  range that is only within a single line, the returned value is no longer
+  unnecessarily wrapped in a `\displaylines{}` command. The wrapper is now only
+  added when the content actually spans multiple lines.
+- **#2770** Fixed cursor positioning on first click in complex formulas.
+  Previously, clicking to position the cursor in formulas with many nested
+  elements (fractions, subscripts, superscripts) would fail until keyboard
+  navigation was used first. The atom bounds cache is now properly maintained
+  across interactions, ensuring accurate cursor positioning from the first
+  click.
+- **#2771** The `<math-field>` element now properly shrinks back to its original
+  size after deleting large multi-line formulas (e.g., `\begin{align}`
+  environments). Previously, when clearing content from a multi-row structure,
+  the empty rows would be preserved, causing the field to remain at the expanded
+  height. Now, when all content is deleted, the structure is reset to a single
+  empty row while preserving the environment type.
+- **#2784** The `\hat{}` accent is now properly centered over uppercase letters.
+  Previously, the accent would appear shifted rather than centered when applied
+  to uppercase characters, while it worked correctly with lowercase letters. The
+  centering algorithm now accounts for the width difference between the base
+  character and the accent to ensure proper positioning for all characters.
+- **#2799** When selecting content inside mathematical structures (square roots,
+  brackets, etc.) using the mouse and then inserting a fraction, the selected
+  content no longer disappears. The selection is now properly used as the
+  numerator of the fraction.
+- **#2816** Programmatic calls to `.focus()` now correctly trigger `focusin`
+  events.
+- **#2818** The `\mathrm` command and other upright variants (`\mathsf`,
+  `\mathtt`) are now correctly preserved when exporting to the `latex-expanded`
+  format. Previously, these commands were being stripped from the output,
+  causing `\mathrm{d}` to be serialized as just `d`.
+- **#2832**, **#2727** Fixed rendering of `\cancel`, `\bcancel`, `\xcancel`, and
+  other SVG-based enclosure notations (diagonal strikes, horizontal/vertical
+  strikes, etc.). In v0.106.0+, these notations became completely invisible due
+  to SVG elements having 0 width in their viewBox. Additionally, when visible,
+  the positioning of strike lines was incorrect, particularly for complex
+  expressions and fractions. The fix restores proper width calculations and
+  implements symmetric padding for notation boxes, using em-based coordinates
+  with small margins for accurate line positioning. Strike lines now properly
+  cover content from corner to corner without extending too far or appearing
+  offset.
+- **#2847** Fixed scroll behavior in fixed-height mathfield containers. When
+  navigating with arrow keys or Tab/Shift+Tab to move between placeholders, the
+  container now properly scrolls to keep the cursor or selection visible.
+  Previously, selecting placeholders would cause the scroll to jump to the top,
+  and navigating upward wouldn't scroll when the cursor was on the first line.
+  The fix also adds padding (20px) so scrolling happens before the cursor
+  reaches the very edge of the viewport, and ensures full selections are visible
+  rather than just showing 1 pixel.
+- **#2849** For compatibility with KaTeX, do not wrap the argument of delimiter
+  commands.
+- **#2851** Fixed multiline row merging when deleting across multiple lines.
+  Previously, when a selection spanned multiple rows in a multiline environment
+  (like `\displaylines`) and was deleted, the remaining content would stay on
+  separate lines instead of merging. Now, when deleting across rows, the
+  remaining fragments are properly merged into a single line.
+- **#2859** When using `mathVirtualKeyboardPolicy="manual"`, controlling the
+  virtual keyboard via `focusin`/`focusout` event listeners now works correctly.
+  The keyboard no longer closes immediately after opening.
+- **#2867** In some cases, applying a superscript or subscript to a command with
+  an argument (for example `\mathbb{R}`) would incorrectly include the argument
+  in the superscript or subscript.
+- **#2884** The command to add/remove columns and rows when in a `cases`
+  environment are now enabled.
+- **#2889** Custom attributes would not be propagated to the generated markup.
+- Fixed double-click selection of styled text. Previously, double-clicking on
+  styled content like `\mathrm{xyz}` would incorrectly select adjacent unstyled
+  text instead of the styled content itself. The selection boundary logic now
+  properly checks the next atom's style before advancing, preventing off-by-one
+  errors when determining style boundaries.
+- **#2892** Fixed superscripts and subscripts shifting upward when inside a
+  `\colorbox` command. Elements with background colors now receive proper
+  vertical alignment (`vertical-align: -depth`) to prevent positioning issues
+  with content of different heights. The fix also ensures background colors use
+  the correct color palette (background colors instead of foreground colors) and
+  maintains editability via the background color menu. Selection highlighting no
+  longer causes subscripts to shift, as vertical alignment is only applied to
+  intentional background colors, not selection highlights.
+- Fix empty-line selection highlighting in multiline mathfields
+
+## 0.107.1 _2025-09-30_
+
+### Resolved Issues
+
+- **#2817** Calling `setPromptValue()` no longer changes the focus to the
+  mathfield.
+- **#2805** On mobile, show the math virtual keyboard when using prompts
+- Custom macros are now read when using speakable text to speech.
+- **#2824** Using TypeScript would trigger a compile error about
+  `Cannot find module '../editor/keyboard-layout'`
+
+## 0.107.0 _2025-08-17_
+
+### New Features
+
+- Added `mountMathVirtualKeyboard()` to control in which browsing context the
+  math virtual keyboard is mounted.
+
+### Resolved Issues
+
+- **#2800**: New line on matrix causes duplicated input
+
 ## 0.106.0 _2025-07-11_
 
 ### New Features
@@ -158,7 +683,6 @@ MathfieldElement.createHTML = (html) => DOMPurify.sanitize(html);
 - Generate only standard trigonometric functions, i.e. those available in the
   `amsmath` package. Use `\operatorname{}` for the others. The standard commands
   are:
-
   - `\arccos`
   - `\arcsin`
   - `\arctan`
@@ -313,7 +837,6 @@ For example:
   definition.
 
   The keycaps are one of these special shortcuts:
-
   - `[left]`, `[right]`, `[up]`, `[down]`, `[return]`, `[action]`,
   - `[space]`, `[tab]`, `[backspace]`, `[shift]`,
   - `[undo]`, `[redo]`, `[foreground-color]`, `[background-color]`,
@@ -528,7 +1051,6 @@ numbers.
 
   Added CSS variables to control the appearance of the toolip displayed with
   `\mathtip` and `\texttip`:
-
   - `--tooltip-border`
   - `--tooltip-color`
   - `--tooltip-background-color`

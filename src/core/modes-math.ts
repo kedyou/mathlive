@@ -1,4 +1,3 @@
-/* eslint-disable no-new */
 import { Atom } from './atom';
 import { joinLatex, latexCommand } from './tokenizer';
 import {
@@ -8,11 +7,18 @@ import {
   weightString,
 } from './modes-utils';
 import type { Box } from './box';
-import type { Style, Variant, VariantStyle } from '../public/core-types';
+import type {
+  FontSeries,
+  FontShape,
+  Style,
+  Variant,
+  VariantStyle,
+} from '../public/core-types';
 import { mathVariantToUnicode } from './unicode';
 import type { TokenDefinition } from 'latex-commands/types';
 import type { FontName, ToLatexOptions } from './types';
 import { addItalic } from '../editor-model/styling';
+import { getDefinition } from '../latex-commands/definitions';
 
 // Each entry indicate the font-name (to be used to calculate font metrics)
 // and the CSS classes (for proper markup styling) for each possible
@@ -28,6 +34,12 @@ const VARIANTS: Record<string, [fontName: FontName, cssClass: string]> = {
   'normal-bold': ['Main-Bold', 'ML__mathbf'], // 'main' font. There is no 'math' bold
   'normal-italic': ['Math-Italic', 'ML__mathit'], // Special metrics for 'math'
   'normal-bolditalic': ['Math-BoldItalic', 'ML__mathbfit'], // Special metrics for 'math'
+
+  // Alias for 'normal' - used by \bf, \it, \rmfamily commands
+  'roman': ['Main-Regular', 'ML__cmr'],
+  'roman-bold': ['Main-Bold', 'ML__mathbf'],
+  'roman-italic': ['Math-Italic', 'ML__mathit'],
+  'roman-bolditalic': ['Math-BoldItalic', 'ML__mathbfit'],
 
   // Extended math symbols, arrows, etc.. at their standard Unicode codepoints
   'ams': ['AMS-Regular', 'ML__ams'],
@@ -162,6 +174,8 @@ export class MathMode extends Mode {
     style: {
       // For math mode
       fontFamily: string;
+      fontSeries?: FontSeries;
+      fontShape?: FontShape;
       letterShapeStyle?: 'tex' | 'french' | 'iso' | 'upright';
       variant: Variant;
       variantStyle?: VariantStyle;
@@ -170,8 +184,24 @@ export class MathMode extends Mode {
     console.assert(style.variant !== undefined);
 
     if (style.fontFamily) {
-      const [fontName, classes] = VARIANTS[style.fontFamily];
+      // Build the variant key from fontFamily + fontSeries + fontShape
+      let variantKey = style.fontFamily;
 
+      // Map fontSeries ('b' = bold, 'm' = medium) and fontShape ('it' = italic, 'n' = normal)
+      // to variantStyle suffixes
+      if (style.fontSeries === 'b' && style.fontShape === 'it')
+        variantKey += '-bolditalic';
+      else if (style.fontSeries === 'b') variantKey += '-bold';
+      else if (style.fontShape === 'it') variantKey += '-italic';
+
+      // If the variant doesn't exist, try the base fontFamily
+      const variant = VARIANTS[variantKey] ?? VARIANTS[style.fontFamily];
+      if (!variant) {
+        console.error(`Unknown font family variant: ${variantKey}`);
+        return null;
+      }
+
+      const [fontName, classes] = variant;
       if (classes) box.classes += ' ' + classes;
 
       return fontName;
@@ -282,7 +312,7 @@ function emitBoldRun(run: Atom[], options: ToLatexOptions): string[] {
 }
 
 function emitVariantRun(
-  run: Readonly<Atom[]>,
+  run: readonly Atom[],
   options: ToLatexOptions
 ): string[] {
   const { parent } = run[0];
@@ -329,9 +359,44 @@ function emitVariantRun(
       console.assert(command !== undefined);
     }
 
-    const arg = joinLatex(x.map((x) => x._serialize(options)));
+    // When we have a variant command, superscripts/subscripts should be
+    // applied AFTER the variant command, not inside it.
+    // For example, \mathbb{R}^0 not \mathbb{R^0}
+    // See issue #2867
+    let trailingSupsub = '';
+    const lastAtom = x[x.length - 1];
+    const hasTrailingSupsub =
+      command &&
+      x.length > 0 &&
+      (lastAtom.branch('subscript') !== undefined ||
+        lastAtom.branch('superscript') !== undefined);
+
+    if (hasTrailingSupsub) trailingSupsub = lastAtom.supsubToLatex(options);
+
+    const arg = joinLatex(
+      x.map((atom, index) => {
+        // For the last atom with a superscript/subscript in a variant command,
+        // serialize without the supsub (we'll add it after the command)
+        if (hasTrailingSupsub && index === x.length - 1) {
+          // Get the definition to check if it has a custom serializer
+          const def = getDefinition(atom.command, atom.mode);
+          if (def?.serialize) return def.serialize(atom, options);
+
+          // Serialize the atom without superscript/subscript
+          if (atom.body && atom.command)
+            return latexCommand(atom.command, atom.bodyToLatex(options));
+
+          if (atom.body) return atom.bodyToLatex(options);
+
+          if (!atom.value || atom.value === '\u200B') return '';
+          return atom.command || atom.value;
+        }
+        return atom._serialize(options);
+      })
+    );
+
     if (!command) return arg;
-    return latexCommand(command, arg);
+    return latexCommand(command, arg) + trailingSupsub;
   });
 }
 

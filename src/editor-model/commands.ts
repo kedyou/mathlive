@@ -68,11 +68,7 @@ export function wordBoundaryOffset(
 
     // Skip whitespace
     let i = offset;
-    while (
-      model.at(i) &&
-      model.at(i).mode === 'text' &&
-      /\s/.test(model.at(i).value)
-    )
+    while (model.at(i)?.mode === 'text' && /\s/.test(model.at(i).value))
       i += dir;
 
     if (!model.at(i)) {
@@ -91,11 +87,7 @@ export function wordBoundaryOffset(
     // (3)
     let i = offset;
     // Skip non-whitespace
-    while (
-      model.at(i) &&
-      model.at(i).mode === 'text' &&
-      !/\s/.test(model.at(i).value)
-    )
+    while (model.at(i)?.mode === 'text' && !/\s/.test(model.at(i).value))
       i += dir;
 
     result = model.at(i) ? i : i - dir;
@@ -454,7 +446,7 @@ function isValidPosition(model: _Model, pos: number): boolean {
 
 function getClosestAtomToXPosition(
   mathfield: _Mathfield,
-  search: Readonly<Atom[]>,
+  search: readonly Atom[],
   x: number
 ): Atom {
   let prevX = Infinity;
@@ -483,7 +475,7 @@ function getClosestAtomToXPosition(
 function moveToClosestAtomVertically(
   model: _Model,
   fromAtom: Atom,
-  toAtoms: Readonly<Atom[]>,
+  toAtoms: readonly Atom[],
   extend: boolean,
   direction: 'up' | 'down'
 ) {

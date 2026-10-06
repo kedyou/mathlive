@@ -13,6 +13,7 @@ import { LAYOUTS } from './data';
 import { VirtualKeyboard } from './virtual-keyboard';
 import { MathfieldProxy } from '../public/virtual-keyboard';
 import { hasVariants, showVariantsPanel } from './variants';
+import { showInsertMenu } from './insert-menu';
 import {
   NormalizedVirtualKeyboardLayer,
   NormalizedVirtualKeyboardLayout,
@@ -64,6 +65,48 @@ function latexToMarkup(latex: string): string {
   );
 
   return makeStruts(box, { classes: 'ML__latex' }).toMarkup();
+}
+
+function escapeAttribute(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function stripTags(value: string): string {
+  return value.replace(/<\/?[^>]+(>|$)/g, ' ');
+}
+
+function getKeycapAriaLabel(
+  keycap: Partial<VirtualKeyboardKeycap>
+): string | null {
+  const candidate =
+    keycap.tooltip ??
+    (typeof keycap.label === 'string' ? stripTags(keycap.label) : undefined) ??
+    keycap.insert ??
+    keycap.latex ??
+    keycap.key;
+  if (!candidate) return null;
+  const label = candidate.replace(/\s+/g, ' ').trim();
+  return label || null;
+}
+
+function serializeKeycapCommand(
+  command: undefined | VirtualKeyboardKeycap['command']
+): string | null {
+  if (typeof command === 'undefined' || command === null) return null;
+  try {
+    return JSON.stringify(command);
+  } catch {
+    return null;
+  }
+}
+
+function getKeycapValue(keycap: Partial<VirtualKeyboardKeycap>): string | null {
+  const value = keycap.insert ?? keycap.latex ?? keycap.key;
+  return value ?? null;
 }
 
 function normalizeLayer(
@@ -321,7 +364,9 @@ export function makeEditToolbar(
   const toolbarOptions = options.editToolbar;
   if (toolbarOptions === 'none') return '';
 
-  const availableActions: string[] = [];
+  // Kedyou: the menu toggle of the mathfield is hidden, so offer its insert
+  // menus from the keyboard instead
+  const availableActions: string[] = ['insertMenu'];
 
   if (mathfield.selectionIsCollapsed) availableActions.push('undo', 'redo');
   else availableActions.push('cutToClipboard', 'copyToClipboard');
@@ -329,6 +374,10 @@ export function makeEditToolbar(
   availableActions.push('pasteFromClipboard', 'closeVirtualKeyboard');
 
   const actionsMarkup = {
+    insertMenu: `<div class='action MLK__menu-toggle'
+          data-tooltip='${l10n('tooltip.menu')}'>
+          <svg><use xlink:href='#svg-menu' /></svg>
+      </div>`,
     undo: `<div class='action ${mathfield.canUndo === false ? 'disabled' : ''}'
           data-command='"undo"'
           data-tooltip='${l10n('tooltip.undo')}'>
@@ -415,7 +464,10 @@ function makeSyntheticKeycap(element: HTMLElement): void {
     if (element.hasAttribute('data-command')) {
       try {
         keycap.command = JSON.parse(element.dataset.command!);
-      } catch (e) {}
+      } catch (e) {
+        // Invalid JSON in data-command attribute, ignore it
+        console.warn('Invalid JSON in data-command attribute', e);
+      }
     }
 
     element.id = keyboard.registerKeycap(keycap);
@@ -486,6 +538,7 @@ const SVG_ICONS = `<svg xmlns="http://www.w3.org/2000/svg" style="display: none;
 <symbol id="svg-trash" viewBox="0 0 448 512">
   <path d="M336 64l-33.6-44.8C293.3 7.1 279.1 0 264 0h-80c-15.1 0-29.3 7.1-38.4 19.2L112 64H24C10.7 64 0 74.7 0 88v2c0 3.3 2.7 6 6 6h26v368c0 26.5 21.5 48 48 48h288c26.5 0 48-21.5 48-48V96h26c3.3 0 6-2.7 6-6v-2c0-13.3-10.7-24-24-24h-88zM184 32h80c5 0 9.8 2.4 12.8 6.4L296 64H152l19.2-25.6c3-4 7.8-6.4 12.8-6.4zm200 432c0 8.8-7.2 16-16 16H80c-8.8 0-16-7.2-16-16V96h320v368zm-176-44V156c0-6.6 5.4-12 12-12h8c6.6 0 12 5.4 12 12v264c0 6.6-5.4 12-12 12h-8c-6.6 0-12-5.4-12-12zm-80 0V156c0-6.6 5.4-12 12-12h8c6.6 0 12 5.4 12 12v264c0 6.6-5.4 12-12 12h-8c-6.6 0-12-5.4-12-12zm160 0V156c0-6.6 5.4-12 12-12h8c6.6 0 12 5.4 12 12v264c0 6.6-5.4 12-12 12h-8c-6.6 0-12-5.4-12-12z"/>
 </symbol>
+<symbol id="svg-menu" viewBox="0 0 448 512"><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></symbol>
 <symbol id="svg-keyboard-down" viewBox="0 0 576 512"><path d="M64 48c-8.8 0-16 7.2-16 16V240c0 8.8 7.2 16 16 16H512c8.8 0 16-7.2 16-16V64c0-8.8-7.2-16-16-16H64zM0 64C0 28.7 28.7 0 64 0H512c35.3 0 64 28.7 64 64V240c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V64zM159 359c9.4-9.4 24.6-9.4 33.9 0l95 95 95-95c9.4-9.4 24.6-9.4 33.9 0s9.4 24.6 0 33.9L305 505c-4.5 4.5-10.6 7-17 7s-12.5-2.5-17-7L159 393c-9.4-9.4-9.4-24.6 0-33.9zm1-167c0-8.8 7.2-16 16-16H400c8.8 0 16 7.2 16 16v16c0 8.8-7.2 16-16 16H176c-8.8 0-16-7.2-16-16V192zM120 88h16c8.8 0 16 7.2 16 16v16c0 8.8-7.2 16-16 16H120c-8.8 0-16-7.2-16-16V104c0-8.8 7.2-16 16-16zm64 16c0-8.8 7.2-16 16-16h16c8.8 0 16 7.2 16 16v16c0 8.8-7.2 16-16 16H200c-8.8 0-16-7.2-16-16V104zm96-16h16c8.8 0 16 7.2 16 16v16c0 8.8-7.2 16-16 16H280c-8.8 0-16-7.2-16-16V104c0-8.8 7.2-16 16-16zm64 16c0-8.8 7.2-16 16-16h16c8.8 0 16 7.2 16 16v16c0 8.8-7.2 16-16 16H360c-8.8 0-16-7.2-16-16V104zm96-16h16c8.8 0 16 7.2 16 16v16c0 8.8-7.2 16-16 16H440c-8.8 0-16-7.2-16-16V104c0-8.8 7.2-16 16-16z"/></symbol>
 </svg>`;
 // <symbol id="svg-wikipedia" viewBox="0 0 640 512">
@@ -538,6 +591,16 @@ export function makeKeyboardElement(keyboard: VirtualKeyboard): HTMLDivElement {
   if (toolbars) {
     for (const toolbar of toolbars) {
       toolbar.addEventListener('click', (ev) => {
+        // Kedyou: open on click rather than pointerdown, otherwise the click
+        // of a tap lands on the menu scrim and dismisses the menu
+        const menuToggle = (ev.target as Element).closest<HTMLElement>(
+          '.MLK__menu-toggle'
+        );
+        if (menuToggle) {
+          showInsertMenu(keyboard, menuToggle, ev);
+          return;
+        }
+
         let target: HTMLElement | null = ev.target as HTMLElement;
         let command = '';
         while (target && !command) {
@@ -629,7 +692,25 @@ function makeLayer(
             layerMarkup += `<div tabindex="-1" id="${keycapId}" class="${cls}"`;
 
           if (keycap.tooltip)
-            layerMarkup += ` data-tooltip="${keycap.tooltip}"`;
+            layerMarkup += ` data-tooltip="${escapeAttribute(keycap.tooltip)}"`;
+
+          const ariaLabel = getKeycapAriaLabel(keycap);
+          if (ariaLabel)
+            layerMarkup += ` aria-label="${escapeAttribute(ariaLabel)}"`;
+
+          const serializedCommand = serializeKeycapCommand(keycap.command);
+          if (serializedCommand) {
+            layerMarkup += ` data-command="${escapeAttribute(
+              serializedCommand
+            )}"`;
+          }
+
+          const keycapValue = getKeycapValue(keycap);
+          if (keycapValue) {
+            layerMarkup += ` data-keycap-value="${escapeAttribute(
+              keycapValue
+            )}"`;
+          }
 
           layerMarkup += `>${markup}</div>`;
         }
@@ -665,8 +746,7 @@ export function renderKeycap(
     else if (typeof keycap.shift === 'object') {
       markup = keycap.shift.label
         ? keycap.shift.label
-        : // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
-          ((latexToMarkup(keycap.shift.latex || keycap.shift.insert || '') ||
+        : ((latexToMarkup(keycap.shift.latex || keycap.shift.insert || '') ||
             keycap.shift.key) ??
           '');
     }
@@ -678,8 +758,7 @@ export function renderKeycap(
     //
     markup = keycap.label
       ? keycap.label
-      : // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
-        ((latexToMarkup(keycap.latex || keycap.insert || '') || keycap.key) ??
+      : ((latexToMarkup(keycap.latex || keycap.insert || '') || keycap.key) ??
         '');
 
     if (keycap.shift) {
@@ -690,7 +769,6 @@ export function renderKeycap(
       else if (keycap.shift.label) shiftLabel = keycap.shift.label;
       else {
         shiftLabel =
-          // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
           (latexToMarkup(keycap.shift.latex || keycap.shift.insert || '') ||
             keycap.shift.key) ??
           '';
@@ -1107,6 +1185,22 @@ function handlePointerDown(ev: PointerEvent) {
 
   console.assert(ev.type === 'pointerdown');
 
+  // CRITICAL: Ensure connection is established before sending command
+  // This handles the case where connection was lost between keypresses
+  // Check if we have a connected window, and if not, try to reconnect
+  const vk = keyboard as any;
+  if (!vk.connectedMathfieldWindow) {
+    // Try to find the most recently focused mathfield window
+    // In iframe scenarios, this should be the iframe's contentWindow
+    const focusedMf = (window as any).focusedMathfield?.();
+    if (focusedMf) {
+      // If the mathfield is in an iframe, we need to connect to that iframe's window
+      const mfWindow = focusedMf.element?.ownerDocument?.defaultView;
+      if (mfWindow && mfWindow !== window)
+        vk.connectedMathfieldWindow = mfWindow;
+    }
+  }
+
   const controller = new AbortController();
   const signal = controller.signal;
 
@@ -1277,7 +1371,9 @@ export function executeKeycapCommand(
       { focus: true, feedback: true, simulateKeystroke: true },
     ];
   }
-  VirtualKeyboard.singleton?.executeCommand(command);
+
+  if (VirtualKeyboard.singleton)
+    VirtualKeyboard.singleton.executeCommand(command);
 }
 
 function isKeycapElement(el: Element): el is HTMLElement {

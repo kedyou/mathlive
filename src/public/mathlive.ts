@@ -33,6 +33,7 @@
 
 import type { VirtualKeyboardInterface } from './virtual-keyboard';
 import type { StaticRenderOptions } from './options';
+export { setKeyboardLayoutLocale, setKeyboardLayout } from './keyboard-layout';
 
 export * from './commands';
 export * from './core-types';
@@ -41,6 +42,7 @@ export * from './mathfield';
 export * from './mathfield-element';
 export * from './mathlive-ssr';
 export * from './virtual-keyboard';
+export * from './math-static-elements';
 
 export declare function renderMathInDocument(
   options?: StaticRenderOptions
@@ -50,6 +52,8 @@ export declare function renderMathInElement(
   element: string | HTMLElement,
   options?: StaticRenderOptions
 ): void;
+
+export declare function initVirtualKeyboardInCurrentBrowsingContext(): void;
 
 export declare const version: {
   mathlive: string;

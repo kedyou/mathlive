@@ -15,7 +15,9 @@ import {
 import { moveAfterParent } from '../editor-model/commands-move';
 import { range } from '../editor-model/selection-utils';
 
-import { removeSuggestion, updateAutocomplete } from './autocomplete';
+import { complete, removeSuggestion, updateAutocomplete } from './autocomplete';
+import { getLatexGroupBody } from './mode-editor-latex';
+import { getDefinition } from '../latex-commands/definitions-utils';
 import { requestUpdate } from './render';
 import type { _Mathfield } from './mathfield-private';
 import { removeIsolatedSpace, smartMode } from './smartmode';
@@ -41,7 +43,7 @@ import { computeInsertStyle } from './styling';
  * ## Theory of Operation
  *
  * When the user types on the keyboard, printable keys (i.e. not arrows, shift,
- * escape, etc...) are captured in a `keystrokeBuffer`.
+ * escape, etc...) are captured in a `inlineShortcutBuffer`.
  *
  * The buffer is used to determine if the user intended to type an
  * inline shortcut (e.g. "pi" for `\pi`) or a multichar symbol.
@@ -61,7 +63,6 @@ export function onKeystroke(
   const { model } = mathfield;
 
   const keystroke = keyboardEventToString(evt);
-
   // 1. Update the current keyboard layout based on this event
   if (evt.isTrusted) {
     validateKeyboardLayout(evt);
@@ -98,8 +99,30 @@ export function onKeystroke(
   // Ignore the key if Command or Control is pressed (it may be a keybinding,
   // see 4.3)
   const buffer = mathfield.inlineShortcutBuffer;
+
+  let placeholderReplaced = false;
+
+  // If a placeholder is selected and we're about to type a printable character,
+  // delete the placeholder first, then process the keystroke normally
+  // (including any keybindings). This fixes issue #2572.
+  if (
+    mathfield.isSelectionEditable &&
+    model.selectionIsPlaceholder &&
+    mightProducePrintableCharacter(evt)
+  ) {
+    mathfield.flushInlineShortcutBuffer();
+    // Delete the selected placeholder
+    model.deleteAtoms(range(model.selection));
+    // Snapshot this as a placeholder replacement operation
+    mathfield.snapshot('delete');
+    placeholderReplaced = true;
+  }
+
   if (mathfield.isSelectionEditable) {
-    if (model.mode === 'math') {
+    if (
+      model.mode === 'math' &&
+      (!model.selectionIsPlaceholder || placeholderReplaced)
+    ) {
       if (keystroke === '[Backspace]') {
         // If last operation was a shortcut conversion, "undo" the
         // conversion, otherwise, discard the last keystroke
@@ -223,6 +246,20 @@ export function onKeystroke(
         }
       }
       return success;
+    }
+
+    // Handle Space key in LaTeX mode to complete and exit
+    if (keystroke === '[Space]' && model.mode === 'latex') {
+      // Try to complete the LaTeX command and exit LaTeX mode
+      if (complete(mathfield, 'accept-all')) {
+        mathfield.dirty = true;
+        mathfield.scrollIntoView();
+        if (evt.preventDefault) {
+          evt.preventDefault();
+          evt.stopPropagation();
+        }
+        return false;
+      }
     }
 
     if ((!selector || keystroke === '[Space]') && model.mode === 'math') {
@@ -358,22 +395,23 @@ export function onKeystroke(
 
   //
   // 6.1 If we have a `moveAfterParent` selector (usually triggered with
-  // `spacebar`), and we're at the end of a smart fence, close the fence with
-  // an empty (.) right delimiter
+  // `spacebar`), and we're at the end of a smart fence, accept the pending
+  // closing delimiter so it is no longer rendered as a suggestion.
   //
   const child = model.at(Math.max(model.position, model.anchor));
   const { parent } = child;
   if (
     selector === 'moveAfterParent' &&
-    parent?.type === 'leftright' &&
+    parent instanceof LeftRightAtom &&
     child.isLastSibling &&
     mathfield.options.smartFence &&
-    insertSmartFence(model, '.', mathfield.defaultStyle)
+    parent.rightDelim === '?'
   ) {
-    // Pressing the space bar (moveAfterParent selector) when at the end
-    // of a potential smartFence will close it as a semi-open fence
-    selector = '';
-    requestUpdate(mathfield); // Re-render the closed smartFence
+    mathfield.snapshot();
+    parent.rightDelim = parent.matchingRightDelim();
+    parent.isDirty = true;
+    model.contentDidChange({ inputType: 'insertText' });
+    mathfield.snapshot('insert-fence');
   }
 
   //
@@ -474,6 +512,146 @@ export function onKeystroke(
 }
 
 /**
+ * Detect if the content before the cursor matches a scientific notation pattern.
+ * Returns the match information if found, null otherwise.
+ *
+ * Pattern: digits + (e|E) + optional(+|-) + digits
+ * Examples: 3.14e2, 5E-3, 1.23e+10
+ */
+function detectScientificNotation(model: _Model): {
+  startOffset: number;
+  endOffset: number;
+  significand: string;
+  exponent: string;
+} | null {
+  const { position } = model;
+
+  // Get atoms at and to the left of the cursor
+  // We need to check from position (not position-1) because when a non-inserting
+  // character like space is pressed, the cursor doesn't advance
+  let offset = position;
+  const atoms: Atom[] = [];
+
+  // Collect atoms going backwards from cursor position
+  // Include digits, decimal points, 'e'/'E', and +/- signs
+  while (offset > 0) {
+    const atom = model.at(offset);
+    const value = atom.value;
+
+    // Only collect atoms that could be part of scientific notation
+    if (
+      atom.type === 'mord' ||
+      (atom.type === 'mbin' &&
+        (value === '+' || value === '-' || value === '\u2212'))
+    ) {
+      atoms.unshift(atom);
+      offset--;
+    } else break;
+  }
+
+  if (atoms.length === 0) return null;
+
+  // Build the string from atoms
+  const text = atoms.map((a) => a.value).join('');
+
+  // Match scientific notation pattern: significand e|E [+|-] exponent
+  // Respect the localized decimal separator
+  const separator = globalThis.MathfieldElement?.decimalSeparator ?? '.';
+  const separatorRegex = separator === '.' ? '\\.' : ',';
+  // Use non-capturing group (?:...) to avoid shifting match groups
+  const pattern = new RegExp(
+    `^(\\d+(?:${separatorRegex}\\d*)?)[eE]([+\\-\u2212]?)(\\d+)$`
+  );
+  const match = text.match(pattern);
+
+  if (!match) return null;
+
+  const significand = match[1];
+  const sign = match[2];
+  const exponentDigits = match[3];
+  const exponent = sign + exponentDigits;
+
+  return {
+    startOffset: offset,
+    endOffset: position,
+    significand,
+    exponent,
+  };
+}
+
+/**
+ * Apply the scientific notation template to format the detected pattern.
+ * Template uses #1 for significand and #2 for exponent.
+ */
+function applyScientificNotationTemplate(
+  significand: string,
+  exponent: string
+): string | null {
+  const template = globalThis.MathfieldElement?.scientificNotationTemplate;
+
+  // Validate template
+  if (
+    !template ||
+    template === '' ||
+    !template.includes('#1') ||
+    !template.includes('#2')
+  )
+    return null;
+
+  // Replace placeholders
+  let result = template.replace('#1', significand);
+  result = result.replace('#2', exponent);
+
+  return result;
+}
+
+/**
+ * Check if scientific notation should be formatted and apply the template if applicable.
+ * This is called when a non-digit character is typed or after a timeout.
+ */
+function formatScientificNotationIfApplicable(mathfield: _Mathfield): boolean {
+  const { model } = mathfield;
+
+  // Only format in math mode
+  if (model.mode !== 'math') return false;
+
+  // Detect scientific notation pattern
+  const match = detectScientificNotation(model);
+  if (!match) return false;
+
+  // Apply template
+  const formatted = applyScientificNotationTemplate(
+    match.significand,
+    match.exponent
+  );
+  if (!formatted) return false;
+
+  // Replace the matched range with the formatted template
+  model.deferNotifications(
+    { content: true, selection: true, type: 'insertText' },
+    () => {
+      // Select the scientific notation atoms
+      model.selection = {
+        ranges: [[match.startOffset, match.endOffset]],
+        direction: 'forward',
+      };
+
+      // Insert the formatted template
+      ModeEditor.insert(model, formatted, {
+        insertionMode: 'replaceSelection',
+        selectionMode: 'after',
+      });
+    }
+  );
+
+  mathfield.snapshot('format-scientific-notation');
+  mathfield.dirty = true;
+  mathfield.scrollIntoView();
+
+  return true;
+}
+
+/**
  * This handler is invoked when text has been input with an input method.
  * As a result, `text` can be a sequence of characters to be inserted.
  * @param {object} options
@@ -564,6 +742,61 @@ export function onInput(
         updateAutocomplete(mathfield);
       }
     );
+
+    // Check if we just typed a closing brace that completes all mandatory arguments
+    // This needs to be done AFTER deferNotifications completes
+    if (text === '}') {
+      const latexBody = getLatexGroupBody(model);
+      const latex = latexBody.map((x) => x.value).join('');
+
+      // Extract the command name (e.g., "\frac" from "\frac{1}{2}")
+      const commandMatch = latex.match(/^\\([a-zA-Z]+)/);
+      if (commandMatch) {
+        const commandName = '\\' + commandMatch[1];
+
+        // Look up the command definition
+        const def = getDefinition(commandName, 'math');
+        if (def?.definitionType === 'function') {
+          // Count the number of mandatory (non-optional) arguments
+          const mandatoryArgCount = def.params.filter(
+            (p) => !p.isOptional
+          ).length;
+          if (mandatoryArgCount > 0) {
+            // Count how many complete brace pairs we have at the top level
+            let depth = 0;
+            let completedBraces = 0;
+            let inCommandName = true;
+
+            for (let i = 0; i < latex.length; i++) {
+              const char = latex[i];
+
+              // Skip the command name itself
+              if (inCommandName) {
+                if (char === '\\' || /[a-zA-Z]/.test(char)) continue;
+                inCommandName = false;
+              }
+
+              if (char === '{') depth++;
+              else if (char === '}') {
+                depth--;
+                // Count a completed brace pair when we return to depth 0
+                if (depth === 0) completedBraces++;
+              }
+            }
+
+            // Auto-complete only if we've completed all mandatory arguments
+            // (depth is 0 and we have the right number of completed brace pairs)
+            if (depth === 0 && completedBraces === mandatoryArgCount) {
+              if (complete(mathfield, 'accept-all')) {
+                mathfield.dirty = true;
+                mathfield.scrollIntoView();
+                return;
+              }
+            }
+          }
+        }
+      }
+    }
   } else if (model.mode === 'text') {
     const style = { ...getSelectionStyle(model), ...mathfield.defaultStyle };
     for (const c of graphemes)
@@ -596,6 +829,11 @@ function getLeftSiblings(mf: _Mathfield): Atom[] {
 function insertMathModeChar(mathfield: _Mathfield, c: string): void {
   const model = mathfield.model;
 
+  // Check if we should format scientific notation before processing the character
+  // This needs to happen before special character handling (like space)
+  // After formatting, continue to insert the triggering character
+  if (!/\d/.test(c)) formatScientificNotationIfApplicable(mathfield);
+
   // Some characters are mapped to commands. Handle them here.
   // This is important to handle synthetic text input and
   // non-US keyboards, on which, for example, the '^' key is
@@ -616,6 +854,23 @@ function insertMathModeChar(mathfield: _Mathfield, c: string): void {
     } as const
   )[c];
 
+  if (selector === 'moveAfterParent') {
+    const child = model.at(Math.max(model.position, model.anchor));
+    const { parent } = child;
+    if (
+      parent instanceof LeftRightAtom &&
+      child.isLastSibling &&
+      mathfield.options.smartFence &&
+      parent.rightDelim === '?'
+    ) {
+      mathfield.snapshot();
+      parent.rightDelim = parent.matchingRightDelim();
+      parent.isDirty = true;
+      model.contentDidChange({ inputType: 'insertText' });
+      mathfield.snapshot('insert-fence');
+    }
+  }
+
   if (selector) {
     mathfield.executeCommand(selector);
     return;
@@ -630,6 +885,7 @@ function insertMathModeChar(mathfield: _Mathfield, c: string): void {
   }
 
   const atom = model.at(model.position);
+  const wasPlaceholderSelected = model.selectionIsPlaceholder;
 
   if (
     /\d/.test(c) &&
@@ -643,7 +899,11 @@ function insertMathModeChar(mathfield: _Mathfield, c: string): void {
     // We are inserting a digit into an empty superscript
     // If smartSuperscript is on, insert the digit, and exit the superscript.
     if (
-      !ModeEditor.insert(model, c, { style, insertionMode: 'replaceSelection' })
+      !ModeEditor.insert(model, c, {
+        style,
+        insertionMode: 'replaceSelection',
+        selectionMode: wasPlaceholderSelected ? 'after' : 'placeholder',
+      })
     ) {
       mathfield.undoManager.pop();
       return;
@@ -666,15 +926,33 @@ function insertMathModeChar(mathfield: _Mathfield, c: string): void {
   else if (input === '\\') input = '\\backslash';
 
   // General purpose character insertion
+  // If a placeholder was selected, use 'after' selection mode to avoid
+  // re-selecting the inserted content (issue #2572)
   if (
     !ModeEditor.insert(model, input, {
       style,
       insertionMode: 'replaceSelection',
+      selectionMode: wasPlaceholderSelected ? 'after' : 'placeholder',
     })
   )
     return;
 
   mathfield.snapshot(`insert-${model.at(model.position).type}`);
+
+  // If typing a digit, set up a timeout to format after user stops typing
+  if (/\d/.test(c)) {
+    // Use inlineShortcutTimeout if > 0, otherwise use a default of 1000ms
+    const timeoutValue =
+      mathfield.options.inlineShortcutTimeout > 0
+        ? mathfield.options.inlineShortcutTimeout
+        : 1000;
+
+    // Clear any existing timeout first
+    clearTimeout(mathfield.scientificNotationTimer);
+    mathfield.scientificNotationTimer = setTimeout(() => {
+      formatScientificNotationIfApplicable(mathfield);
+    }, timeoutValue);
+  }
 }
 
 export function getSelectionStyle(model: _Model): Readonly<Style> {
@@ -718,7 +996,8 @@ function insertSmartFence(model: _Model, key: string, style?: Style): boolean {
     // There is a selection, wrap it with the fence
     model.mathfield.snapshot();
     const [start, end] = range(model.selection);
-    const body = model.extractAtoms([start, end]);
+    let body = model.extractAtoms([start, end]);
+    body = body.filter((a) => a.type !== 'first');
     const atom = parent!.addChildrenAfter(
       [
         new LeftRightAtom('left...right', body, {
@@ -797,21 +1076,20 @@ function insertSmartFence(model: _Model, key: string, style?: Style): boolean {
       if (sibling) {
         model.mathfield.snapshot();
         // We've found a matching sibling
-        const body = model.extractAtoms([
+        let body = model.extractAtoms([
           model.offsetOf(atom),
           model.offsetOf(sibling),
         ]);
         body.pop();
-        parent!.addChildrenAfter(
-          [
-            new LeftRightAtom('left...right', body, {
-              leftDelim: fence,
-              rightDelim: rDelim,
-            }),
-          ],
-          atom
-        );
-        model.position = model.offsetOf(parent!.firstChild) + 1;
+        body = body.filter((a) => a.type !== 'first');
+        const newLeftRight = new LeftRightAtom('left...right', body, {
+          leftDelim: fence,
+          rightDelim: rDelim,
+        });
+        parent!.addChildrenAfter([newLeftRight], atom);
+
+        // Position cursor inside the new leftright, after the left delimiter
+        model.position = model.offsetOf(newLeftRight.firstChild);
         model.contentDidChange({ data: fence, inputType: 'insertText' });
         model.mathfield.snapshot('insert-fence');
         return true;

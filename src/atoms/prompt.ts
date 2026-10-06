@@ -5,6 +5,7 @@ import { Box } from '../core/box';
 import { Context } from '../core/context';
 import { latexCommand } from '../core/tokenizer';
 import type { AtomJson, ToLatexOptions } from 'core/types';
+import { PlaceholderAtom } from './placeholder';
 
 export class PromptAtom extends Atom {
   readonly placeholderId?: string;
@@ -14,13 +15,12 @@ export class PromptAtom extends Atom {
     placeholderId?: string,
     correctness?: 'correct' | 'incorrect' | undefined,
     locked = false,
-    body?: Readonly<Atom[]>,
+    body?: readonly Atom[],
     options?: {
       mode?: ParseMode;
       style?: Style;
     }
   ) {
-    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     super({
       type: 'prompt',
       mode: options?.mode ?? 'math',
@@ -70,12 +70,23 @@ export class PromptAtom extends Atom {
 
     if (!content) return null;
 
-    // An empty prompt should not be too small, pretend content
-    // has height sigma 5 (x-height)
+    const isEffectivelyEmpty =
+      !this.body ||
+      this.body.length === 0 ||
+      this.body.every((atom) => atom.type === 'first');
 
-    if (!content.height) content.height = context.metrics.xHeight;
+    const placeholderMetrics = isEffectivelyEmpty
+      ? new PlaceholderAtom({
+          mode: this.mode,
+          style: this.style,
+        }).render(new Context({ parent: parentContext, isPhantom: true }))
+      : null;
+    const emptyHeight = placeholderMetrics?.height ?? context.metrics.xHeight;
+    const emptyDepth = placeholderMetrics?.depth ?? emptyHeight / 2;
+    const effectiveHeight = Math.max(content.height ?? 0, emptyHeight);
+    const effectiveDepth = Math.max(content.depth ?? 0, emptyDepth);
 
-    content.setStyle('vertical-align', -content.height, 'em');
+    content.setStyle('vertical-align', `calc(-${effectiveHeight}em + 2px)`);
     if (this.correctness === 'correct') {
       content.setStyle(
         'color',
@@ -88,10 +99,20 @@ export class PromptAtom extends Atom {
       );
     }
 
+    const squareSide = effectiveHeight + effectiveDepth + 2 * vPadding;
+    const minInnerWidth = squareSide - 2 * hPadding;
+
     const base = new Box(content, { type: 'ord' });
     base.setStyle('display', 'inline-block');
-    base.setStyle('height', content.height + content.depth, 'em');
+    base.height = effectiveHeight;
+    base.depth = effectiveDepth;
+    base.setStyle('height', effectiveHeight + effectiveDepth, 'em');
     base.setStyle('vertical-align', -vPadding, 'em');
+
+    if ((content.width ?? 0) < minInnerWidth) {
+      base.width = minInnerWidth;
+      base.setStyle('width', minInnerWidth, 'em');
+    }
 
     // This box will represent the box (background and border).
     // It's positioned to overlap the base.
@@ -117,22 +138,12 @@ export class PromptAtom extends Atom {
     box.depth = base.depth + vPadding;
     box.width = base.width + 2 * hPadding;
     box.setStyle('position', 'absolute');
-
-    box.setStyle(
-      'height',
-      `calc(${base.height + base.depth + 2 * vPadding}em - 2px)`
-    ); // @todo: remove
-    if (hPadding === 0) box.setStyle('width', '100%'); // @todo: remove
+    box.setStyle('height', base.height + base.depth + 2 * vPadding, 'em');
+    if (hPadding === 0) box.setStyle('width', '100%');
     if (hPadding !== 0) {
-      box.setStyle('width', `calc(100% + ${2 * hPadding}em)`); // @todo: remove
-      box.setStyle('top', fboxsep, 'em'); // empirical
+      box.setStyle('width', `calc(100% + ${2 * hPadding}em)`);
+      box.setStyle('top', fboxsep, 'em');
       box.setStyle('left', -hPadding, 'em');
-    }
-    // empty prompt should be a little wider
-    if (!this.body || this.body.length === 1) {
-      box.width = 3 * hPadding;
-      box.setStyle('width', `calc(100% + ${3 * hPadding}em)`);
-      box.setStyle('left', -1.5 * hPadding, 'em');
     }
     let svg = ''; // strike through incorrect prompt, for users with impaired color vision
 
@@ -154,23 +165,32 @@ export class PromptAtom extends Atom {
     result.setStyle('display', 'inline-block');
     result.setStyle('line-height', 0);
 
-    // The padding adds to the width and height of the pod
-    result.height = base.height + vPadding + 0.2;
-    result.depth = base.depth + vPadding;
+    result.height = effectiveHeight + vPadding + 0.2;
+    result.depth = effectiveDepth + vPadding;
     result.left = hPadding;
     result.right = hPadding;
-    result.setStyle('height', base.height + vPadding, 'em');
-    result.setStyle('top', base.depth - base.height, 'em');
-    result.setStyle('vertical-align', base.depth + vPadding, 'em');
+    result.setStyle('height', effectiveHeight + 2 * vPadding, 'em');
+    result.setStyle(
+      'top',
+      effectiveDepth - effectiveHeight - vPadding / 2,
+      'em'
+    );
+    result.setStyle('vertical-align', base.depth, 'em');
     result.setStyle('margin-left', 0.5, 'em');
     result.setStyle('margin-right', 0.5, 'em');
 
     if (this.caret) result.caret = this.caret;
 
-    return this.bind(
-      context,
-      this.attachSupsub(parentContext, { base: result })
-    );
+    const withSupSub = this.attachSupsub(parentContext, { base: result });
+    const bound = this.bind(context, withSupSub);
+
+    if (bound && this.id) {
+      box.atomID = this.id;
+      base.atomID = this.id;
+      result.atomID = this.id;
+    }
+
+    return bound;
   }
 
   _serialize(options: ToLatexOptions): string {

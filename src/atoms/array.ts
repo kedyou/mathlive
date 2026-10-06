@@ -27,7 +27,7 @@ export type ColumnFormat =
     }
   | {
       // The width of a gap between columns, or a LaTeX expression between columns
-      gap: number | Readonly<Atom[]>;
+      gap: number | readonly Atom[];
     }
   | {
       // A rule (line) separating columns
@@ -84,14 +84,14 @@ type ArrayRow = {
 
 function normalizeCells(
   atom: ArrayAtom,
-  cells: ReadonlyArray<Atom>[][],
+  cells: (readonly Atom[])[][],
   options: {
-    columns: Readonly<ColumnFormat[]>;
+    columns: readonly ColumnFormat[];
     minColumns: number;
     minRows: number;
     maxRows: number;
   }
-): Readonly<Atom[]>[][] {
+): (readonly Atom[])[][] {
   //
   // 1/
   // - Fold the array so that there are no more columns of content than
@@ -108,13 +108,13 @@ function normalizeCells(
 
   // Actual number of columns (at most `maxColCount`)
   let colCount = 0;
-  const rows: ReadonlyArray<Atom>[][] = [];
+  const rows: (readonly Atom[])[][] = [];
 
   for (const row of cells) {
     colCount = Math.max(colCount, Math.min(row.length, maxColCount));
     let colIndex = 0;
     while (colIndex < row.length) {
-      const newRow: ReadonlyArray<Atom>[] = [];
+      const newRow: (readonly Atom[])[] = [];
       const lastCol = Math.min(row.length, colIndex + maxColCount);
       while (colIndex < lastCol) {
         newRow.push(normalizeCell(row[colIndex], atom.mode));
@@ -145,13 +145,13 @@ function normalizeCells(
   //
   // 3/ Fill out any missing cells
   //
-  const result: Readonly<Atom[]>[][] = [];
+  const result: (readonly Atom[])[][] = [];
   for (const row of rows) {
     if (row.length !== colCount) {
       for (let i = row.length; i < colCount; i++) {
-        if (atom.isMultiline) {
+        if (atom.isMultiline)
           row.push([new Atom({ type: 'first', mode: atom.mode })]);
-        } else {
+        else {
           row.push([
             new Atom({ type: 'first', mode: atom.mode }),
             new PlaceholderAtom(),
@@ -184,10 +184,40 @@ function normalizeCells(
   return result;
 }
 
+function isEmptyMultilineCell(cell: readonly Atom[]): boolean {
+  return cell.length > 0 && cell.every((atom) => atom.type === 'first');
+}
+
+function makeEmptyLineAnchor(
+  cell: readonly Atom[],
+  context: Context,
+  metrics: { height: number; depth: number }
+): Box {
+  const marker = new Box(null, { classes: 'ML__empty-line-anchor' });
+  const idSource = cell[0];
+  if (idSource) {
+    if (!idSource.id) idSource.id = context.makeID();
+    marker.atomID = idSource.id;
+  }
+  marker.setStyle('display', 'inline-block');
+  marker.setStyle('width', 0);
+  marker.setStyle('position', 'relative');
+  marker.setStyle('height', Math.max(0, metrics.height + metrics.depth), 'em');
+  marker.setStyle('vertical-align', -metrics.depth, 'em');
+  marker.height = metrics.height;
+  marker.depth = metrics.depth;
+
+  const caretAtom = cell.find((atom) => atom.caret);
+  if (caretAtom?.caret) marker.caret = caretAtom.caret;
+  if (cell.some((atom) => atom.isSelected)) marker.selected(true);
+
+  return marker;
+}
+
 function normalizeCell(
-  cell: ReadonlyArray<Atom>,
+  cell: readonly Atom[],
   mode: ParseMode
-): ReadonlyArray<Atom> {
+): readonly Atom[] {
   if (cell.length === 0) return [new Atom({ type: 'first', mode })];
   if (cell[0].type !== 'first')
     return [new Atom({ type: 'first', mode }), ...cell];
@@ -195,7 +225,7 @@ function normalizeCell(
   return cell;
 }
 
-function isEmptyCell(cell: ReadonlyArray<Atom>): boolean {
+function isEmptyCell(cell: readonly Atom[]): boolean {
   return cell.length === 1 && cell[0].type === 'first';
 }
 
@@ -221,9 +251,9 @@ export class ArrayAtom extends Atom {
   }
 
   // The array is a 2D array of cells, each cell being an array of atoms
-  private _rows: (undefined | Readonly<Atom[]>)[][];
+  private _rows: (undefined | readonly Atom[])[][];
 
-  rowGaps: Readonly<Dimension[]>;
+  rowGaps: readonly Dimension[];
   arraystretch?: number;
   arraycolsep?: number;
   colSeparationType?: ColSeparationType;
@@ -231,7 +261,7 @@ export class ArrayAtom extends Atom {
   rightDelim?: string;
   mathstyleName?: MathstyleName;
 
-  colFormat: Readonly<ColumnFormat[]>;
+  colFormat: readonly ColumnFormat[];
   minColumns: number;
   minRows: number;
   maxRows: number;
@@ -241,8 +271,8 @@ export class ArrayAtom extends Atom {
 
   constructor(
     envName: Environment,
-    array: Readonly<Atom[]>[][],
-    rowGaps: Readonly<Dimension[]>,
+    array: (readonly Atom[])[][],
+    rowGaps: readonly Dimension[],
     options: Readonly<ArrayAtomConstructorOptions> = {}
   ) {
     super({ type: 'array', isRoot: options.isRoot });
@@ -343,7 +373,7 @@ export class ArrayAtom extends Atom {
     return result;
   }
 
-  branch(cell: Branch): Readonly<Atom[]> | undefined {
+  branch(cell: Branch): readonly Atom[] | undefined {
     if (!isCellBranch(cell)) return undefined;
     return this._rows[cell[0]][cell[1]] ?? undefined;
   }
@@ -366,7 +396,7 @@ export class ArrayAtom extends Atom {
     return this.colFormat.filter((col) => Boolean(col['align'])).length;
   }
 
-  removeBranch(name: Branch): Readonly<Atom[]> {
+  removeBranch(name: Branch): readonly Atom[] {
     if (isNamedBranch(name)) return super.removeBranch(name);
 
     const [_first, ...children] = this.branch(name)!;
@@ -387,7 +417,7 @@ export class ArrayAtom extends Atom {
     return this.children.length > 0;
   }
 
-  get children(): Readonly<Atom[]> {
+  get children(): readonly Atom[] {
     const result: Atom[] = [];
     for (const row of this._rows) {
       for (const cell of row) {
@@ -456,8 +486,13 @@ export class ArrayAtom extends Atom {
       const outrow: ArrayRow = { cells: [], height: 0, depth: 0, pos: 0 };
       for (const element of inrow) {
         const elt =
-          Atom.createBox(cellContext, element, { type: 'ignore' }) ??
-          new Box(null, { type: 'ignore' });
+          this.isMultiline && element && isEmptyMultilineCell(element)
+            ? makeEmptyLineAnchor(element, cellContext, {
+                height: arstrutHeight / cellContext.scalingFactor,
+                depth: arstrutDepth / cellContext.scalingFactor,
+              })
+            : (Atom.createBox(cellContext, element, { type: 'ignore' }) ??
+              new Box(null, { type: 'ignore' }));
         depth = Math.max(depth, elt.depth);
         height = Math.max(height, elt.height);
         outrow.cells.push(elt);
@@ -491,7 +526,12 @@ export class ArrayAtom extends Atom {
       body.push(outrow);
     }
 
-    const offset = totalHeight / 2 + AXIS_HEIGHT;
+    // For inline array environments, align the first row's baseline rather than
+    // centering around the math axis to avoid blank space above (see issue #2512)
+    const offset =
+      this.environmentName === 'array' && !this.isMultiline
+        ? body[0].height // Align to first row's baseline
+        : totalHeight / 2 + AXIS_HEIGHT; // Center around math axis
     const contentCols: Box[] = [];
     for (let colIndex = 0; colIndex < nc; colIndex++) {
       const stack: VBoxElementAndShift[] = [];
@@ -607,6 +647,13 @@ export class ArrayAtom extends Atom {
       classes: ['ML__mtable', ...this.classes].join(' '),
     });
 
+    // For inline array environments, adjust the box height/depth to align
+    // properly with surrounding text (see issue #2512)
+    if (this.environmentName === 'array' && !this.isMultiline) {
+      inner.height = body[0].height;
+      inner.depth = totalHeight - body[0].height;
+    }
+
     if (
       (!this.leftDelim || this.leftDelim === '.') &&
       (!this.rightDelim || this.rightDelim === '.')
@@ -663,8 +710,11 @@ export class ArrayAtom extends Atom {
   _serialize(options: ToLatexOptions): string {
     const result: string[] = [];
 
-    if (this.environmentName === 'lines') result.push(`\\displaylines{`);
-    else result.push(`\\begin{${this.environmentName}}`);
+    // Only wrap in \displaylines{} if there are multiple rows
+    if (this.environmentName === 'lines' && this._rows.length > 1)
+      result.push(`\\displaylines{`);
+    else if (this.environmentName !== 'lines')
+      result.push(`\\begin{${this.environmentName}}`);
 
     if (this.environmentName === 'array') {
       result.push('{');
@@ -697,24 +747,27 @@ export class ArrayAtom extends Atom {
       }
     }
 
-    if (this.environmentName === 'lines') result.push(`}`);
-    else result.push(`\\end{${this.environmentName}}`);
+    // Only close \displaylines{} if there are multiple rows
+    if (this.environmentName === 'lines' && this._rows.length > 1)
+      result.push(`}`);
+    else if (this.environmentName !== 'lines')
+      result.push(`\\end{${this.environmentName}}`);
 
     return joinLatex(result);
   }
 
   forEachCell(
-    callback: (cell: Readonly<Atom[]>, row: number, col: number) => void
+    callback: (cell: readonly Atom[], row: number, col: number) => void
   ): void {
     for (let i = 0; i < this.rowCount; i++)
       for (let j = 0; j < this.colCount; j++) callback(this._rows[i][j]!, i, j);
   }
 
-  getCell(row: number, col: number): Readonly<Atom[]> | undefined {
+  getCell(row: number, col: number): readonly Atom[] | undefined {
     return this._rows[row]?.[col];
   }
 
-  setCell(row: number, column: number, value: Readonly<Atom[]>): void {
+  setCell(row: number, column: number, value: readonly Atom[]): void {
     console.assert(
       this.type === 'array' &&
         Array.isArray(this._rows) &&
@@ -826,8 +879,8 @@ export class ArrayAtom extends Atom {
     this.isDirty = true;
   }
 
-  get cells(): Readonly<Atom[]>[] {
-    const result: Readonly<Atom[]>[] = [];
+  get cells(): (readonly Atom[])[] {
+    const result: (readonly Atom[])[] = [];
     for (const row of this._rows) {
       for (const cell of row)
         if (cell) result.push(cell.filter((x) => x.type !== 'first'));
@@ -835,7 +888,7 @@ export class ArrayAtom extends Atom {
     return result;
   }
 
-  get rows(): (undefined | Readonly<Atom[]>)[][] {
+  get rows(): (undefined | readonly Atom[])[][] {
     return this._rows!;
   }
 }
@@ -846,10 +899,10 @@ export class ArrayAtom extends Atom {
 function makeEmptyCell(
   parent: ArrayAtom,
   withPlaceholder = false
-): Readonly<Atom[]> {
+): readonly Atom[] {
   const first = new Atom({ type: 'first', mode: parent.mode });
   first.parent = parent;
-  let result = [first];
+  const result = [first];
   if (withPlaceholder) {
     const placeholder = new PlaceholderAtom();
     placeholder.parent = parent;
@@ -862,18 +915,19 @@ function adjustBranches(array: ArrayAtom): void {
   for (let i = 0; i < array.rowCount; i++) {
     for (let j = 0; j < array.colCount; j++) {
       const atoms = array.getCell(i, j);
-      if (atoms)
+      if (atoms) {
         for (const atom of atoms) {
           if (atom) {
             atom.parent = array;
             atom.parentBranch = [i, j];
           }
         }
+      }
     }
   }
 }
 
-function adjustCellBranch(cell: ReadonlyArray<Atom>, row: number, col: number) {
+function adjustCellBranch(cell: readonly Atom[], row: number, col: number) {
   for (const atom of cell) atom.parentBranch = [row, col];
 }
 
@@ -893,7 +947,7 @@ function makeColOfRepeatingElements(
   context: Context,
   rows: ArrayRow[],
   offset: number,
-  element: Readonly<Atom[]> | undefined
+  element: readonly Atom[] | undefined
 ): Box | null {
   if (!element) return null;
   const col: VBoxElementAndShift[] = [];

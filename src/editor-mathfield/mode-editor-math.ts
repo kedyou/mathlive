@@ -1,6 +1,4 @@
-/* eslint-disable no-new */
-
-import type { Expression } from '@cortex-js/compute-engine/dist/types/math-json';
+import type { Expression } from '../public/core-types';
 
 import type { InsertOptions, Offset, OutputFormat } from '../public/core-types';
 
@@ -26,6 +24,37 @@ import {
 import { _Mathfield } from './mathfield-private';
 import { ModeEditor } from './mode-editor';
 import type { AtomJson } from 'core/types';
+
+/**
+ * Kedyou: when inserting into the first column of an aligned environment,
+ * move an aligned delimiter (and what follows it) to the start of the
+ * second column, unless the second column already starts with one.
+ *
+ * Return false if nothing was inserted.
+ */
+function insertIntoAlignedColumns(
+  cursor: Atom,
+  atoms: readonly Atom[]
+): boolean {
+  const aligned = cursor.parent;
+  if (
+    !(aligned instanceof ArrayAtom) ||
+    !isAlignEnvironment(aligned.environmentName) ||
+    cursor.parentBranch![1] !== 0
+  )
+    return false;
+
+  const secondColumn = aligned.rows[cursor.parentBranch![0]][1];
+  if (secondColumn[1] && alignedDelimiters.has(secondColumn[1].command))
+    return false;
+
+  const i = atoms.findIndex((x) => alignedDelimiters.has(x.command));
+  if (i < 0) return false;
+
+  if (i > 0) aligned.addChildrenAfter(atoms.slice(0, i), cursor);
+  aligned.addChildrenAfter(atoms.slice(i), secondColumn[0]);
+  return true;
+}
 
 export class MathModeEditor extends ModeEditor {
   constructor() {
@@ -91,7 +120,12 @@ export class MathModeEditor extends ModeEditor {
               cursor.parent.addColumn();
 
             // add content to the first cell
-            cursor.parent.addChildrenAfter(columns[0], cursor);
+            // Kedyou: a single pasted cell follows the aligned delimiter rule
+            if (
+              columns.length > 1 ||
+              !insertIntoAlignedColumns(cursor, columns[0])
+            )
+              cursor.parent.addChildrenAfter(columns[0], cursor);
             // replace the rest of the columns
             for (let i = 1; i < columns.length; i++) {
               currentColumn++;
@@ -231,13 +265,15 @@ export class MathModeEditor extends ModeEditor {
     //
     // Delete any placeholders before or after the insertion point
     //
+    const currentAtom = model.at(model.position);
     if (
-      !model.at(model.position).isLastSibling &&
-      model.at(model.position + 1).type === 'placeholder'
+      currentAtom &&
+      !currentAtom.isLastSibling &&
+      model.at(model.position + 1)?.type === 'placeholder'
     ) {
       // Before a `placeholder`
       model.deleteAtoms([model.position, model.position + 1]);
-    } else if (model.at(model.position).type === 'placeholder') {
+    } else if (currentAtom?.type === 'placeholder') {
       // After a `placeholder`
       model.deleteAtoms([model.position - 1, model.position]);
     }
@@ -284,13 +320,13 @@ export class MathModeEditor extends ModeEditor {
     const insertingFraction =
       newAtoms.length === 1 && newAtoms[0].type === 'genfrac';
 
+    const atomAtPos = model.at(model.position);
     if (
       insertingFraction &&
       implicitArgumentOffset >= 0 &&
       typeof model.mathfield.options.isImplicitFunction === 'function' &&
-      model.mathfield.options.isImplicitFunction(
-        model.at(model.position).command
-      )
+      atomAtPos &&
+      model.mathfield.options.isImplicitFunction(atomAtPos.command)
     ) {
       // If this is a fraction, and the implicit argument is a function,
       // try again, but without the implicit argument
@@ -304,20 +340,21 @@ export class MathModeEditor extends ModeEditor {
         argFunction,
         options
       );
-    } else if (implicitArgumentOffset >= 0) {
-      // Remove implicit argument
-      model.deleteAtoms([implicitArgumentOffset, model.position]);
-    }
+    } // Implicit argument deletion is deferred until after insertion:
+    // deleting before insertion empties the field and breaks cursor positioning (#2974)
 
     //
     // 3/ Insert the new atoms
     //
 
-    if (newAtoms.length === 1 && newAtoms[0].isRoot) {
-      model.root = newAtoms[0];
-    } else {
-      const { parent } = model.at(model.position);
-      const hadEmptyBody = parent!.hasEmptyBranch('body');
+    // Save the implicit argument range before insertion (in case model.position changes)
+    const implicitArgEndOffset = model.position;
+
+    if (newAtoms.length === 1 && newAtoms[0].isRoot) model.root = newAtoms[0];
+    else {
+      const atom = model.at(model.position);
+      const parent = atom?.parent ?? model.root;
+      const hadEmptyBody = parent.hasEmptyBranch('body');
 
       // Are we inserting a fraction inside a leftright?
       if (
@@ -337,43 +374,34 @@ export class MathModeEditor extends ModeEditor {
       }
 
       const cursor = model.at(model.position);
-
-      // Kedyou: insert aligned delimiter into the second aligned column if typing in the first
-      let insertDefault = true;
-      if (
-        cursor.parent instanceof ArrayAtom &&
-        isAlignEnvironment(cursor.parent.environmentName) && // in aligned
-        cursor.parentBranch![1] === 0 // in the first column
-      ) {
-        // make sure the second column doesn't already have a delimiter
-        const secondColumn = cursor.parent.rows[cursor.parentBranch![0]][1];
-        if (
-          !secondColumn[1] ||
-          !alignedDelimiters.has(secondColumn[1].command)
-        ) {
-          // check if newAtoms is inserting an aligned delimiter
-          let i = 0;
-          for (; i < newAtoms.length; i++) {
-            if (alignedDelimiters.has(newAtoms[i].command)) break;
-          }
-          if (i < newAtoms.length) {
-            // insert the delimiter to the second column, move cursor
-            insertDefault = false;
-            if (i > 0) {
-              cursor.parent.addChildrenAfter(newAtoms.slice(0, i - 1), cursor);
-              cursor.parent.addChildrenAfter(
-                newAtoms.slice(i),
-                secondColumn[0]
-              );
-            } else {
-              cursor.parent.addChildrenAfter(newAtoms, secondColumn[0]);
-            }
-          }
+      if (cursor) {
+        if (!insertIntoAlignedColumns(cursor, newAtoms))
+          cursor.parent!.addChildrenAfter(newAtoms, cursor);
+      } else {
+        // cursor can be null when deferred implicit arg deletion
+        // leaves model.position pointing past the last atom
+        const body = parent.branch('body');
+        const firstAtom = body?.[0];
+        if (firstAtom) {
+          parent.addChildrenAfter(newAtoms, firstAtom);
+        } else {
+          parent.setChildren(newAtoms, 'body');
         }
       }
 
-      if (insertDefault) {
-        cursor.parent!.addChildrenAfter(newAtoms, cursor);
+      if (implicitArgumentOffset >= 0) {
+        model.deleteAtoms([implicitArgumentOffset, implicitArgEndOffset]);
+
+        // deleteAtoms can leave "first" atoms pointing to removed parents
+        const rootBody = model.root.branch('body');
+        if (rootBody) {
+          for (const child of rootBody) {
+            if (child.parent !== model.root) {
+              child.parent = model.root;
+              child.parentBranch = 'body';
+            }
+          }
+        }
       }
 
       if (format === 'latex' && typeof input === 'string') {
@@ -401,9 +429,21 @@ export class MathModeEditor extends ModeEditor {
     //
     if (options.selectionMode === 'placeholder') {
       // Move to the next placeholder
-      const placeholder = newAtoms
-        .flatMap((x) => [x, ...x.children])
-        .find((x) => x.type === 'placeholder');
+      let placeholder: Atom | undefined;
+      if (newAtoms.length === 1 && newAtoms[0].type === 'genfrac') {
+        const numerator = newAtoms[0].branch('above');
+        placeholder = numerator?.find((x) => x.type === 'placeholder');
+        if (!placeholder) {
+          const denominator = newAtoms[0].branch('below');
+          placeholder = denominator?.find((x) => x.type === 'placeholder');
+        }
+      }
+
+      if (!placeholder) {
+        placeholder = newAtoms
+          .flatMap((x) => [x, ...x.children])
+          .find((x) => x.type === 'placeholder');
+      }
 
       if (placeholder) {
         const placeholderOffset = model.offsetOf(placeholder);
@@ -443,13 +483,13 @@ function convertStringToAtoms(
   s: string | Expression,
   args: (arg: string) => string,
   options: InsertOptions
-): [OutputFormat, Readonly<Atom[]>] {
+): [OutputFormat, readonly Atom[]] {
   let format: OutputFormat | undefined = undefined;
-  let result: Readonly<Atom[]> = [];
+  let result: readonly Atom[] = [];
 
-  if (typeof s !== 'string' || options.format === 'math-json') {
+  if (typeof s !== 'string') {
     const ce = globalThis.MathfieldElement.computeEngine;
-    if (!ce) return ['math-json', []];
+    if (!ce) return ['latex', []];
 
     [format, s] = ['latex', ce.box(s as Expression).latex as string];
     result = parseLatex(s, { context: model.mathfield.context });
@@ -545,6 +585,8 @@ function removeExtraneousParenthesis(atom: Atom): Atom {
  */
 function getImplicitArgOffset(model: _Model): Offset {
   let atom = model.at(model.position);
+  if (!atom) return -1;
+
   if (atom.mode === 'text') {
     while (!atom.isFirstSibling && atom.mode === 'text')
       atom = atom.leftSibling;
@@ -563,18 +605,28 @@ function getImplicitArgOffset(model: _Model): Offset {
     while (
       !atom.isFirstSibling &&
       !(atom.type === 'mopen' && atom.value === delim)
-    )
-      atom = atom.leftSibling;
-    if (!atom.isFirstSibling) atom = atom.leftSibling;
+    ) {
+      const left = atom.leftSibling;
+      if (!left) break;
+      atom = left;
+    }
+    if (!atom.isFirstSibling) {
+      const left = atom.leftSibling;
+      if (left) atom = left;
+    }
     afterDelim = true;
   } else if (atom.type === 'leftright') {
-    atom = atom.leftSibling;
+    const left = atom.leftSibling;
+    if (left) atom = left;
     afterDelim = true;
   }
 
   if (afterDelim) {
-    while (!atom.isFirstSibling && (atom.isFunction || isImplicitArg(atom)))
-      atom = atom.leftSibling;
+    while (!atom.isFirstSibling && (atom.isFunction || isImplicitArg(atom))) {
+      const left = atom.leftSibling;
+      if (!left) break;
+      atom = left;
+    }
   } else {
     const delimiterStack: string[] = [];
 
@@ -591,13 +643,139 @@ function getImplicitArgOffset(model: _Model): Offset {
       )
         delimiterStack.shift();
 
-      atom = atom.leftSibling;
+      const left = atom.leftSibling;
+      if (!left) break;
+      atom = left;
     }
   }
 
   if (atomAtCursor === atom) return -1;
 
   return model.offsetOf(atom);
+}
+
+/**
+ * Check if the atom is part of a scientific notation pattern
+ * Handles both: 5e-2 and 3.14×10^-2 formats
+ */
+function isPartOfScientificNotation(atom: Atom): boolean {
+  // Pattern 1: 'e' notation (e.g., 5e-2, 3.14e+10)
+  // Check if this is 'e' preceded by a digit
+  if (atom.type === 'mord' && atom.value === 'e') {
+    const left = atom.leftSibling;
+    if (left && left.isDigit()) return true;
+  }
+
+  // Check if this is '+' or '-' preceded by 'e' and that 'e' is preceded by a digit
+  // Note: minus might be '-' (hyphen-minus) or '−' (minus sign U+2212)
+  if (
+    atom.type === 'mbin' &&
+    (atom.value === '+' || atom.value === '-' || atom.value === '−')
+  ) {
+    const left = atom.leftSibling;
+    const right = atom.rightSibling;
+    if (
+      left?.type === 'mord' &&
+      left.value === 'e' &&
+      right &&
+      right.isDigit()
+    ) {
+      const leftLeft = left.leftSibling;
+      if (leftLeft && leftLeft.isDigit()) return true;
+    }
+  }
+
+  // Pattern 2: ×10^ notation (e.g., 3.14×10^-2, 5×10^3)
+  // The structure is: digit(s) × 1 0 subsup
+  // where the subsup has the exponent in its superscript branch
+
+  // Check if this is a subsup atom (the ^ part after 10)
+  if (atom.type === 'subsup') {
+    // Check if left siblings are "0" and "1"
+    const left1 = atom.leftSibling; // should be "0"
+    if (left1 && left1.isDigit() && left1.value === '0') {
+      const left2 = left1.leftSibling; // should be "1"
+      if (left2 && left2.isDigit() && left2.value === '1') {
+        // Check if preceded by × (times)
+        const left3 = left2.leftSibling;
+        if (
+          left3?.type === 'mbin' &&
+          (left3.value === '×' || left3.value === '\\times')
+        ) {
+          // Check if the times is preceded by a digit
+          const left4 = left3.leftSibling;
+          if (left4 && left4.isDigit()) return true;
+        }
+      }
+    }
+  }
+
+  // Check if this is "0" that's part of "10^"
+  if (atom.isDigit() && atom.value === '0') {
+    const left = atom.leftSibling; // should be "1"
+    const right = atom.rightSibling; // should be subsup
+    if (
+      left &&
+      left.isDigit() &&
+      left.value === '1' &&
+      right?.type === 'subsup'
+    ) {
+      // Check if "1" is preceded by ×
+      const left2 = left.leftSibling;
+      if (
+        left2?.type === 'mbin' &&
+        (left2.value === '×' || left2.value === '\\times')
+      ) {
+        // Check if × is preceded by a digit
+        const left3 = left2.leftSibling;
+        if (left3 && left3.isDigit()) return true;
+      }
+    }
+  }
+
+  // Check if this is "1" that's part of "10^"
+  if (atom.isDigit() && atom.value === '1') {
+    const right1 = atom.rightSibling; // should be "0"
+    if (right1 && right1.isDigit() && right1.value === '0') {
+      const right2 = right1.rightSibling; // should be subsup
+      if (right2?.type === 'subsup') {
+        // Check if preceded by ×
+        const left = atom.leftSibling;
+        if (
+          left?.type === 'mbin' &&
+          (left.value === '×' || left.value === '\\times')
+        ) {
+          // Check if × is preceded by a digit
+          const left2 = left.leftSibling;
+          if (left2 && left2.isDigit()) return true;
+        }
+      }
+    }
+  }
+
+  // Check if this is × (times) in the pattern digit × 10^exponent
+  if (
+    atom.type === 'mbin' &&
+    (atom.value === '×' || atom.value === '\\times')
+  ) {
+    const left = atom.leftSibling;
+    const right1 = atom.rightSibling; // should be "1"
+    if (
+      left &&
+      left.isDigit() &&
+      right1 &&
+      right1.isDigit() &&
+      right1.value === '1'
+    ) {
+      const right2 = right1.rightSibling; // should be "0"
+      if (right2 && right2.isDigit() && right2.value === '0') {
+        const right3 = right2.rightSibling; // should be subsup
+        if (right3?.type === 'subsup') return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -611,6 +789,10 @@ function getImplicitArgOffset(model: _Model): Offset {
 function isImplicitArg(atom: Atom): boolean {
   // A digit, or a decimal point
   if (atom.isDigit()) return true;
+
+  // Check for scientific notation patterns
+  if (isPartOfScientificNotation(atom)) return true;
+
   if (
     atom.type &&
     /^(mord|surd|subsup|leftright|mop|mclose)$/.test(atom.type)

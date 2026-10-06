@@ -76,13 +76,47 @@ export function adjustForScrolling(
 }
 
 function getNodeBounds(node: Element): Rect {
-  const bounds = node.getBoundingClientRect();
-  const marginRight = parseInt(getComputedStyle(node).marginRight);
+  let target: Element = node;
+  let bounds = target.getBoundingClientRect();
+
+  // If the node has no height (for example an empty cell), walk up the DOM
+  // tree to find an ancestor that contributes layout so we can anchor the
+  // selection highlight to the line box rather than collapsing to the origin.
+  while (
+    bounds.bottom === bounds.top &&
+    target.parentElement instanceof Element
+  ) {
+    target = target.parentElement;
+    bounds = target.getBoundingClientRect();
+    if (bounds.bottom !== bounds.top) break;
+  }
+
+  const styles = getComputedStyle(target as Element);
+  const marginRight = parseInt(styles.marginRight);
+  let width = bounds.right - bounds.left;
+  let height = bounds.bottom - bounds.top;
+
+  if (width === 0 || !Number.isFinite(width)) {
+    const computedWidth = parseFloat(styles.width);
+    if (Number.isFinite(computedWidth) && computedWidth > 0)
+      width = computedWidth;
+    else if (target instanceof HTMLElement && target.offsetWidth > 0)
+      width = target.offsetWidth;
+  }
+
+  if (height === 0 || !Number.isFinite(height)) {
+    const computedHeight = parseFloat(styles.height);
+    if (Number.isFinite(computedHeight) && computedHeight > 0)
+      height = computedHeight;
+    else if (target instanceof HTMLElement && target.offsetHeight > 0)
+      height = target.offsetHeight;
+  }
+
   const result: Rect = {
     top: bounds.top - 1,
-    bottom: bounds.bottom,
+    bottom: bounds.top - 1 + height,
     left: bounds.left,
-    right: bounds.right - 1 + marginRight,
+    right: bounds.left + width - 1 + marginRight,
   };
   if (node.children.length === 0 || node.tagName.toUpperCase() === 'SVG')
     return result;
@@ -108,8 +142,40 @@ export function getAtomBounds(mathfield: _Mathfield, atom: Atom): Rect | null {
   if (!atom.id) return null;
   let result: Rect | null = mathfield.atomBoundsCache?.get(atom.id) ?? null;
   if (result !== null) return result;
-  const node = mathfield.field.querySelector(`[data-atom-id="${atom.id}"]`);
-  result = node ? getNodeBounds(node) : null;
+  const nodes = mathfield.field.querySelectorAll(`[data-atom-id="${atom.id}"]`);
+  const nodeList = Array.from(nodes);
+
+  // For prompts, explicitly find and measure the overlay box (.ML__prompt)
+  // to ensure its full bounds (including padding) are included
+  if (atom.type === 'prompt') {
+    for (const node of nodeList) {
+      if (node.classList.contains('ML__prompt-atom')) {
+        // This is the outer container - look for the overlay inside it
+        const overlay = node.querySelector('.ML__prompt');
+        if (overlay) {
+          const overlayBounds = getNodeBounds(overlay as HTMLElement);
+          if (!result) result = overlayBounds;
+          else {
+            result.left = Math.min(result.left, overlayBounds.left);
+            result.right = Math.max(result.right, overlayBounds.right);
+            result.top = Math.min(result.top, overlayBounds.top);
+            result.bottom = Math.max(result.bottom, overlayBounds.bottom);
+          }
+        }
+      }
+    }
+  }
+
+  for (const node of nodeList) {
+    const bounds = getNodeBounds(node as HTMLElement);
+    if (!result) result = bounds;
+    else {
+      result.left = Math.min(result.left, bounds.left);
+      result.right = Math.max(result.right, bounds.right);
+      result.top = Math.min(result.top, bounds.top);
+      result.bottom = Math.max(result.bottom, bounds.bottom);
+    }
+  }
   if (mathfield.atomBoundsCache) {
     if (result) mathfield.atomBoundsCache.set(atom.id, result);
     else mathfield.atomBoundsCache.delete(atom.id);
@@ -126,9 +192,8 @@ export function getRangeBoundingRect(mf: _Mathfield, range: Range): Rect {
   for (let i = start; i <= end; i++) {
     const bounds = getAtomBounds(mf, mf.model.at(i));
     if (bounds) {
-      if (!result) {
-        result = bounds;
-      } else {
+      if (!result) result = bounds;
+      else {
         result.top = Math.min(result.top, bounds.top);
         result.bottom = Math.max(result.bottom, bounds.bottom);
         result.left = Math.min(result.left, bounds.left);

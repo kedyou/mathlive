@@ -5,8 +5,17 @@ import { Box } from '../core/box';
 import { Context } from '../core/context';
 import { latexCommand } from '../core/tokenizer';
 import { getDefinition } from '../latex-commands/definitions-utils';
-import { X_HEIGHT } from '../core/font-metrics';
+import { X_HEIGHT, AXIS_HEIGHT } from '../core/font-metrics';
 import type { AtomJson, ToLatexOptions } from 'core/types';
+
+/** Escape special characters to prevent attribute injection in SVG markup. */
+function escapeSvgAttr(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
 
 export type EncloseAtomOptions = {
   shadow?: string;
@@ -54,7 +63,7 @@ export class EncloseAtom extends Atom {
 
   constructor(
     command: string,
-    body: Readonly<Atom[]>,
+    body: readonly Atom[],
     notation: Notations,
     options: EncloseAtomOptions
   ) {
@@ -182,18 +191,57 @@ export class EncloseAtom extends Atom {
 
     let svg = '';
 
-    if (this.notation.horizontalstrike) svg += this.line(3, 50, 97, 50);
+    // Small margin for strike lines (as fraction of total dimension)
+    const margin = Math.min(padding * 0.2, 0.05);
 
-    if (this.notation.verticalstrike) svg += this.line(50, 3, 50, 97);
+    if (this.notation.horizontalstrike) {
+      // Position at x-height for text strike-through
+      // X-height is typically around the middle of lowercase letters
+      const y = 2 * padding + base.height - X_HEIGHT / 2;
+      svg += this.line(
+        (padding + margin).toString(),
+        y.toString(),
+        (padding + base.width - margin).toString(),
+        y.toString()
+      );
+    }
 
-    if (this.notation.updiagonalstrike) svg += this.line(3, 97, 97, 3);
+    if (this.notation.verticalstrike) {
+      const x = padding + base.width / 2;
+      svg += this.line(
+        x.toString(),
+        (padding + margin).toString(),
+        x.toString(),
+        (h - padding - margin).toString()
+      );
+    }
 
-    if (this.notation.downdiagonalstrike) svg += this.line(3, 3, 97, 97);
+    if (this.notation.updiagonalstrike) {
+      // Bottom-left to top-right in SVG coords (y increases downward)
+      // Now symmetric: padding at top and bottom
+      svg += this.line(
+        (padding + margin).toString(),
+        (h - padding - margin).toString(), // bottom
+        (padding + base.width - margin).toString(),
+        (padding + margin).toString() // top
+      );
+    }
+
+    if (this.notation.downdiagonalstrike) {
+      // Top-left to bottom-right
+      // Now symmetric: padding at top and bottom
+      svg += this.line(
+        (padding + margin).toString(),
+        (padding + margin).toString(), // top
+        (padding + base.width - margin).toString(),
+        (h - padding - margin).toString() // bottom
+      );
+    }
 
     if (this.notation.updiagonalarrow) {
       svg += this.line(
         padding.toString(),
-        (padding + base.depth + base.height).toString(),
+        (2 * padding + base.depth + base.height).toString(),
         (padding + base.width).toString(),
         padding.toString()
       );
@@ -213,7 +261,7 @@ export class EncloseAtom extends Atom {
         y + hf + 0.4 * wf
       } `;
       svg += `${x},${y}`;
-      svg += `" stroke='none' fill="${this.strokeColor}"`;
+      svg += `" stroke='none' fill="${escapeSvgAttr(this.strokeColor ?? '')}"`;
       svg += '/>';
     }
     let wDelta = 0;
@@ -223,7 +271,7 @@ export class EncloseAtom extends Atom {
         base.height +
         base.depth +
         2 * clearance +
-        padding
+        2 * padding
       ).toString();
       const angleWidth = (base.height + base.depth) / 2;
       // Horizontal line
@@ -277,14 +325,15 @@ export class EncloseAtom extends Atom {
       svg += `M ${padding} ${padding}  a${surdWidth} ${
         (base.depth + base.height + 2 * clearance) / 2
       }, 0, 1, 1, 0 ${base.depth + base.height + 2 * clearance} "`;
-      svg += ` stroke-width="${getRuleThickness(context)}" stroke="${
-        this.strokeColor
-      }" fill="none"`;
+      svg += ` stroke-width="${getRuleThickness(context)}" stroke="${escapeSvgAttr(
+        this.strokeColor ?? ''
+      )}" fill="none"`;
       svg += '/>';
     }
-    // notation.width = base.width + 2 * padding + wDelta;
-    notation.height = base.height + padding;
-    notation.depth = base.depth + padding;
+    notation.width = base.width + 2 * padding + wDelta;
+    // Symmetric padding: extend height and depth equally
+    notation.height = base.height + 2 * padding;
+    notation.depth = base.depth;
     notation.setStyle('box-sizing', 'border-box');
     notation.setStyle('left', `calc(-1 * ${borderWidth} - ${padding}em)`);
     // notation.setStyle('height', `${Math.floor(100 * h) / 100}em`);
@@ -293,7 +342,8 @@ export class EncloseAtom extends Atom {
       `calc( ${base.height + base.depth + 2 * padding}em + ${borderWidth})`
     );
     // );
-    notation.setStyle('top', `calc(-${padding}em )`);
+    // Symmetric positioning: no top offset, padding is in height
+    notation.setStyle('top', `0em`);
     notation.setStyle(
       'width',
       `calc(${base.width + 2 * padding}em + ${borderWidth})`
@@ -341,12 +391,12 @@ export class EncloseAtom extends Atom {
           'filter: drop-shadow(0 0 .5px rgba(255, 255, 255, .7)) drop-shadow(1px 1px 2px #333)';
       }
       if (this.shadow !== 'none')
-        svgStyle += `filter: drop-shadow(${this.shadow})`;
+        svgStyle += `filter: drop-shadow(${escapeSvgAttr(this.shadow ?? '')})`;
 
-      svgStyle += ` stroke-width="${this.strokeWidth}" stroke="${this.strokeColor}"`;
+      svgStyle += ` stroke-width="${escapeSvgAttr(this.strokeWidth ?? '')}" stroke="${escapeSvgAttr(this.strokeColor ?? '')}"`;
       svgStyle += ' stroke-linecap="round"';
       if (this.svgStrokeStyle)
-        svgStyle += ` stroke-dasharray="${this.svgStrokeStyle}"`;
+        svgStyle += ` stroke-dasharray="${escapeSvgAttr(this.svgStrokeStyle)}"`;
       notation.svgStyle = svgStyle;
       notation.svgOverlay = svg;
     }
@@ -368,7 +418,7 @@ export class EncloseAtom extends Atom {
 
     result.height = notation.height;
     result.depth = notation.depth;
-    // result.width = notation.width - 2 * padding;
+    result.width = notation.width - 2 * padding;
     result.left = padding;
     result.right = padding;
 

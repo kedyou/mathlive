@@ -1,4 +1,3 @@
-/* eslint-disable no-new */
 import type { StaticRenderOptions } from './public/options';
 export * from './public/mathlive';
 
@@ -20,6 +19,9 @@ export {
   DEFAULT_KEYBOARD_TOGGLE_GLYPH,
   MENU_GLYPH,
 } from 'editor-mathfield/mathfield-private';
+
+import './public/math-static-elements';
+export { MathSpanElement, MathDivElement } from './public/math-static-elements';
 
 export {
   MenuItemType,
@@ -136,6 +138,8 @@ export function renderMathInElement(
   optionsPrivate.serializeToLatex ??= convertMathJsonToLatex;
   _renderMathInElement(el, optionsPrivate);
 }
+
+export { mountMathVirtualKeyboard as initVirtualKeyboardInCurrentBrowsingContext } from 'virtual-keyboard/global';
 
 /**
  * Current version: `{{SDK_VERSION}}`

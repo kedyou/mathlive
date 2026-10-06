@@ -1,4 +1,4 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
 
 exports[`ARGUMENTS 0/ "\\\\frac" renders correctly 1`] = `
 [
@@ -140,8 +140,7 @@ exports[`BASIC PARSING 16/ "a-b" renders correctly 1`] = `
 ]
 `;
 
-exports[`BASIC PARSING 17/ "a
-b" renders correctly 1`] = `
+exports[`BASIC PARSING 17/ "a\\nb" renders correctly 1`] = `
 [
   "<span class="ML__latex"><span class="ML__strut" style="height:0.7em"></span><span class="ML__base"><span class="ML__mathit">ab</span></span></span>",
   "no-error",
@@ -165,6 +164,76 @@ exports[`BASIC PARSING 19/ "a=1{" renders correctly 1`] = `
 exports[`BASIC PARSING 20/ "a=1{}" renders correctly 1`] = `
 [
   "<span class="ML__latex"><span class="ML__strut" style="height:0.65em"></span><span class="ML__base"><span class="ML__mathit">a</span><span style="display:inline-block;width:0.28em"></span><span class="ML__cmr">=</span><span style="display:inline-block;width:0.28em"></span><span class="ML__cmr">1</span></span></span>",
+  "no-error",
+]
+`;
+
+exports[`REST* ARGUMENT COMMANDS (issue #2570) 0/ "\\\\bf{425}" renders correctly 1`] = `
+[
+  "<span class="ML__latex"><span class="ML__strut" style="height:0.65em"></span><span class="ML__base"><span class="ML__mathbf">425</span></span></span>",
+  "no-error",
+]
+`;
+
+exports[`REST* ARGUMENT COMMANDS (issue #2570) 1/ "\\\\it{text}" renders correctly 1`] = `
+[
+  "<span class="ML__latex"><span class="ML__strut" style="height:0.62em"></span><span class="ML__base"><span class="ML__mathit">text</span></span></span>",
+  "no-error",
+]
+`;
+
+exports[`REST* ARGUMENT COMMANDS (issue #2570) 2/ "\\\\bfseries{bold}" renders correctly 1`] = `
+[
+  "<span class="ML__latex"><span class="ML__strut" style="height:0.7em"></span><span class="ML__base"><span class="ML__text ML__bold">bold</span></span></span>",
+  "no-error",
+]
+`;
+
+exports[`REST* ARGUMENT COMMANDS (issue #2570) 3/ "\\\\mdseries{medium}" renders correctly 1`] = `
+[
+  "<span class="ML__latex"><span class="ML__strut" style="height:0.7em"></span><span class="ML__base"><span class="ML__text">medium</span></span></span>",
+  "no-error",
+]
+`;
+
+exports[`REST* ARGUMENT COMMANDS (issue #2570) 4/ "\\\\upshape{upright}" renders correctly 1`] = `
+[
+  "<span class="ML__latex"><span class="ML__strut" style="height:0.7em"></span><span class="ML__strut--bottom" style="height:0.89em;vertical-align:-0.19em"></span><span class="ML__base"><span class="ML__text">upright</span></span></span>",
+  "no-error",
+]
+`;
+
+exports[`REST* ARGUMENT COMMANDS (issue #2570) 5/ "\\\\slshape{slanted}" renders correctly 1`] = `
+[
+  "<span class="ML__latex"><span class="ML__strut" style="height:0.7em"></span><span class="ML__base"><span class="ML__text ML__shape_sl">slanted</span></span></span>",
+  "no-error",
+]
+`;
+
+exports[`REST* ARGUMENT COMMANDS (issue #2570) 6/ "\\\\scshape{small caps}" renders correctly 1`] = `
+[
+  "<span class="ML__latex"><span class="ML__strut" style="height:0.7em"></span><span class="ML__strut--bottom" style="height:0.89em;vertical-align:-0.19em"></span><span class="ML__base"><span class="ML__text ML__shape_sc">small caps</span></span></span>",
+  "no-error",
+]
+`;
+
+exports[`REST* ARGUMENT COMMANDS (issue #2570) 7/ "\\\\rmfamily{roman}" renders correctly 1`] = `
+[
+  "<span class="ML__latex"><span class="ML__strut" style="height:0.44em"></span><span class="ML__base"><span class="ML__cmr">roman</span></span></span>",
+  "no-error",
+]
+`;
+
+exports[`REST* ARGUMENT COMMANDS (issue #2570) 8/ "\\\\sffamily{sans-serif}" renders correctly 1`] = `
+[
+  "<span class="ML__latex"><span class="ML__strut" style="height:0.7em"></span><span class="ML__strut--bottom" style="height:0.9em;vertical-align:-0.2em"></span><span class="ML__base"><span class="ML__sans">sans</span><span style="display:inline-block;width:0.23em"></span><span class="ML__sans">−</span><span style="display:inline-block;width:0.23em"></span><span class="ML__sans">se</span><span class="ML__sans" style="margin-right:0.02em">r</span><span class="ML__sans">i</span><span class="ML__sans" style="margin-right:0.07em">f</span></span></span>",
+  "no-error",
+]
+`;
+
+exports[`REST* ARGUMENT COMMANDS (issue #2570) 9/ "\\\\ttfamily{monospace}" renders correctly 1`] = `
+[
+  "<span class="ML__latex"><span class="ML__strut" style="height:0.44em"></span><span class="ML__strut--bottom" style="height:0.66em;vertical-align:-0.22em"></span><span class="ML__base"><span class="ML__tt">monospace</span></span></span>",
   "no-error",
 ]
 `;

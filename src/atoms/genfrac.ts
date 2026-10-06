@@ -43,8 +43,8 @@ export class GenfracAtom extends Atom {
   private readonly mathstyleName?: MathstyleName;
 
   constructor(
-    above: Readonly<Atom[]>,
-    below: Readonly<Atom[]>,
+    above: readonly Atom[],
+    below: readonly Atom[],
     options: GenfracOptions
   ) {
     super({
@@ -87,7 +87,7 @@ export class GenfracAtom extends Atom {
 
   // The order of the children, which is used for keyboard navigation order,
   // may be customized for fractions...
-  get children(): Readonly<Atom[]> {
+  get children(): readonly Atom[] {
     if (this._children) return this._children;
 
     const result: Atom[] = [];
@@ -134,8 +134,8 @@ export class GenfracAtom extends Atom {
           [new Box(this.numerPrefix), Atom.createBox(numContext, this.above)],
           { isTight: numContext.isTight, type: 'ignore' }
         )
-      : Atom.createBox(numContext, this.above, { type: 'ignore' }) ??
-        new Box(null, { type: 'ignore' });
+      : (Atom.createBox(numContext, this.above, { type: 'ignore' }) ??
+        new Box(null, { type: 'ignore' }));
 
     const denomContext = new Context(
       {
@@ -149,8 +149,8 @@ export class GenfracAtom extends Atom {
           new Box(this.denomPrefix),
           Atom.createBox(denomContext, this.below, { type: 'ignore' }),
         ])
-      : Atom.createBox(denomContext, this.below, { type: 'ignore' }) ??
-        new Box(null, { type: 'ignore' });
+      : (Atom.createBox(denomContext, this.below, { type: 'ignore' }) ??
+        new Box(null, { type: 'ignore' }));
 
     const ruleThickness = this.hasBarLine ? metrics.defaultRuleThickness : 0;
 

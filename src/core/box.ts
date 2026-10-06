@@ -37,7 +37,7 @@ export function boxType(type: AtomType | undefined): BoxType | undefined {
   return result;
 }
 
-export function atomsBoxType(atoms: Readonly<Atom[]>): BoxType {
+export function atomsBoxType(atoms: readonly Atom[]): BoxType {
   if (atoms.length === 0) return 'ord';
   const first = boxType(atoms[0].type);
   const last = boxType(atoms[atoms.length - 1].type);
@@ -325,12 +325,20 @@ export class Box implements BoxInterface {
     const color = context.color;
     if (color && color !== parent.color) this.setStyle('color', color);
 
-    let backgroundColor = context.backgroundColor;
+    const originalBackgroundColor = context.backgroundColor;
+    let backgroundColor = originalBackgroundColor;
     if (this.isSelected) backgroundColor = highlight(backgroundColor);
 
     if (backgroundColor && backgroundColor !== parent.backgroundColor) {
+      // Store the background color for both detection (via background-color style)
+      // and rendering (via CSS variable). The ::before pseudo-element will render
+      // the background behind the content to avoid painting over adjacent elements.
       this.setStyle('background-color', backgroundColor);
+      this.setStyle('--bg-color' as any, backgroundColor);
       this.setStyle('display', 'inline-block');
+      this.setStyle('position', 'relative');
+      // Add a class that CSS can target to render background via pseudo-element
+      this.classes = this.classes ? `${this.classes} ML__bg` : 'ML__bg';
     }
 
     const scale = context.scalingFactor;
@@ -345,7 +353,7 @@ export class Box implements BoxInterface {
    */
 
   toMarkup(): string {
-    let body = this.value ?? '';
+    let body = this.value ? escapeText(this.value) : '';
 
     //
     // 1. Render the children
@@ -397,7 +405,7 @@ export class Box implements BoxInterface {
     //
     // 3. Markup for props
     //
-    let props: string[] = [];
+    const props: string[] = [];
 
     //
     // 3.1 Classes
@@ -433,17 +441,18 @@ export class Box implements BoxInterface {
     if (this.id) props.push(` data-atom-id=${sanitizeAttributeValue(this.id)}`);
 
     // A (HTML5) CSS id may not contain a space
-    if (this.cssId)
+    if (this.cssId) {
       props.push(
         ` id=${sanitizeAttributeValue(`"${this.cssId.replace(/ /g, '-')}"`)}`
       );
+    }
 
     //
     // 3.3 Attributes
     //
     if (this.attributes) {
-      props.concat(
-        Object.keys(this.attributes).map(
+      props.push(
+        ...Object.keys(this.attributes).map(
           (x) =>
             `${sanitizeAttributeName(x)}=${sanitizeAttributeValue(this.attributes![x])}`
         )
@@ -749,6 +758,19 @@ function horizontalLayout(box: Box, fontName: FontName): void {
 
     box.maxFontSize = maxFontSize;
   }
+}
+
+/**
+ * Escape text destined for HTML *element content* (between tags).
+ * The body of a box is interpolated into a `<span>` as content (never an
+ * attribute), so escaping `&`, `<` and `>` is sufficient to prevent the raw
+ * characters of `\text{}`, `\mbox{}`, etc. from being interpreted as markup.
+ */
+function escapeText(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
 function sanitizeAttributeName(attribute: string): string {

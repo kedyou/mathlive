@@ -31,7 +31,7 @@ function getSelectionPlainString(mf: _Mathfield): string {
   return result;
 }
 
-function getSelectionAtoms(mf: _Mathfield): Readonly<Atom[]> {
+function getSelectionAtoms(mf: _Mathfield): readonly Atom[] {
   const model = mf.model;
   const ranges = model.selection.ranges;
   if (ranges.length !== 1) return [];
@@ -222,7 +222,7 @@ function getDecorationSubmenu(mf: _Mathfield): MenuItem[] {
   ];
 }
 
-function getBackgroundColorSubmenu(mf: _Mathfield): Readonly<MenuItem[]> {
+function getBackgroundColorSubmenu(mf: _Mathfield): readonly MenuItem[] {
   const result: MenuItem[] = [];
   for (const color of Object.keys(BACKGROUND_COLORS)) {
     result.push({
@@ -248,7 +248,7 @@ function getBackgroundColorSubmenu(mf: _Mathfield): Readonly<MenuItem[]> {
   return result;
 }
 
-function getColorSubmenu(mf: _Mathfield): Readonly<MenuItem[]> {
+function getColorSubmenu(mf: _Mathfield): readonly MenuItem[] {
   const result: MenuItem[] = [];
   for (const color of Object.keys(FOREGROUND_COLORS)) {
     result.push({
@@ -284,9 +284,8 @@ class InsertMatrixMenuItem extends _MenuItemState<{
   }
 
   set active(value: boolean) {
-    const cells = this.parentMenu.children as unknown as Readonly<
-      InsertMatrixMenuItem[]
-    >;
+    const cells = this.parentMenu
+      .children as unknown as readonly InsertMatrixMenuItem[];
     if (value) {
       // Make all the items with a smaller column or row active as well
       for (const cell of cells) {
@@ -299,7 +298,7 @@ class InsertMatrixMenuItem extends _MenuItemState<{
   }
 }
 
-function getInsertMatrixSubmenu(mf: _Mathfield): MenuItem[] {
+function getInsertMatrixSubmenu(mf: InsertMenuTarget): MenuItem[] {
   const result: MenuItem[] = [];
 
   for (let row = 1; row <= 5; row++) {
@@ -326,6 +325,37 @@ function getInsertMatrixSubmenu(mf: _Mathfield): MenuItem[] {
   }
 
   return result;
+}
+
+/**
+ * Kedyou: the subset of a mathfield the "Insert Matrix" and "Insert" menus
+ * need, so they can also be shown from the virtual keyboard (which may not
+ * have direct access to the mathfield)
+ */
+export type InsertMenuTarget = Pick<
+  _Mathfield,
+  'insert' | 'isSelectionEditable'
+>;
+
+export function getInsertMenuItems(mf: InsertMenuTarget): MenuItem[] {
+  return [
+    {
+      label: () => localize('menu.insert matrix')!,
+      id: 'insert-matrix',
+      visible: () => mf.isSelectionEditable,
+      submenu: getInsertMatrixSubmenu(mf),
+      submenuClass: 'insert-matrix-submenu',
+      columnCount: 5,
+    },
+    {
+      type: 'divider',
+    },
+    {
+      label: () => localize('menu.insert')!,
+      id: 'insert',
+      submenu: insertMenu(mf),
+    },
+  ];
 }
 
 export function getDefaultMenuItems(mf: _Mathfield): MenuItem[] {
@@ -469,22 +499,7 @@ export function getDefaultMenuItems(mf: _Mathfield): MenuItem[] {
     {
       type: 'divider',
     },
-    {
-      label: () => localize('menu.insert matrix')!,
-      id: 'insert-matrix',
-      visible: () => mf.isSelectionEditable,
-      submenu: getInsertMatrixSubmenu(mf),
-      submenuClass: 'insert-matrix-submenu',
-      columnCount: 5,
-    },
-    {
-      type: 'divider',
-    },
-    {
-      label: () => localize('menu.insert')!,
-      id: 'insert',
-      submenu: insertMenu(mf),
-    },
+    ...getInsertMenuItems(mf),
     {
       type: 'divider',
     },
@@ -565,109 +580,6 @@ export function getDefaultMenuItems(mf: _Mathfield): MenuItem[] {
       type: 'divider',
     },
     {
-      label: () => localize('menu.evaluate')!,
-      id: 'ce-evaluate',
-      visible: () =>
-        mf.isSelectionEditable &&
-        globalThis.MathfieldElement.computeEngine !== null,
-      onMenuSelect: () => {
-        const latex = evaluate(mf);
-        if (!latex) {
-          mf.model.announce('plonk');
-          return;
-        }
-        if (mf.model.selectionIsCollapsed) {
-          mf.model.position = mf.model.lastOffset;
-          mf.insert(`=${latex}`, {
-            insertionMode: 'insertAfter',
-            selectionMode: 'item',
-          });
-        } else {
-          mf.insert(latex, {
-            insertionMode: 'replaceSelection',
-            selectionMode: 'item',
-          });
-        }
-      },
-    },
-    {
-      label: () => localize('menu.simplify')!,
-      id: 'ce-simplify',
-      visible: () =>
-        mf.isSelectionEditable &&
-        globalThis.MathfieldElement.computeEngine !== null,
-      onMenuSelect: () => {
-        if (mf.model.selectionIsCollapsed) {
-          const result = mf.expression?.simplify();
-          mf.model.position = mf.model.lastOffset;
-          if (!result) {
-            mf.model.announce('plonk');
-            return;
-          }
-          mf.insert(`=${result.latex}`, {
-            insertionMode: 'insertAfter',
-            selectionMode: 'item',
-          });
-        } else {
-          const result = globalThis.MathfieldElement.computeEngine
-            ?.parse(mf.getValue(mf.model.selection))
-            .simplify();
-          if (!result) {
-            mf.model.announce('plonk');
-            return;
-          }
-          mf.insert(result.latex, {
-            insertionMode: 'replaceSelection',
-            selectionMode: 'item',
-          });
-        }
-      },
-    },
-    {
-      label: () => {
-        const ce = globalThis.MathfieldElement.computeEngine;
-        if (ce === null) return '';
-
-        const unknown = mf.expression?.unknowns[0];
-        if (unknown) {
-          const latex = ce.box(unknown).latex;
-          return localize('menu.solve-for', convertLatexToMarkup(latex))!;
-        }
-        return localize('menu.solve')!;
-      },
-      id: 'ce-solve',
-      visible: () =>
-        mf.isSelectionEditable &&
-        globalThis.MathfieldElement.computeEngine !== null &&
-        mf.expression?.unknowns.length === 1 &&
-        mf.expression.unknowns[0] !== 'Nothing',
-      onMenuSelect: () => {
-        const expr = mf.expression!;
-        const unknown = expr?.unknowns[0];
-        const results = expr
-          .solve(unknown)
-          ?.map((x) => x.simplify().latex ?? '');
-        if (!results) {
-          mf.model.announce('plonk');
-          return;
-        }
-        mf.insert(
-          `${unknown}=${
-            results.length === 1
-              ? results[0]
-              : '\\left\\lbrace' + results?.join(', ') + '\\right\\rbrace'
-          }`,
-          {
-            insertionMode: 'replaceAll',
-            selectionMode: 'item',
-          }
-        );
-      },
-    },
-    {
-      type: 'divider',
-    },
-    {
       label: () => localize('menu.cut')!,
       id: 'cut',
       onMenuSelect: () => mf.executeCommand('cutToClipboard'),
@@ -731,6 +643,9 @@ function inMatrix(mf: _Mathfield): boolean {
     'bmatrix',
     'vmatrix',
     'Bmatrix',
+    'cases',
+    'dcases',
+    'rcases',
   ].includes(env);
 }
 
@@ -765,26 +680,6 @@ function performSetEnvironment(mf: _Mathfield, env: TabularEnvironment): void {
   mf.flushInlineShortcutBuffer();
   setEnvironment(mf.model, env);
   requestUpdate(mf);
-}
-
-function evaluate(mf: _Mathfield): string {
-  let expr: any;
-  if (mf.model.selectionIsCollapsed) {
-    expr = globalThis.MathfieldElement.computeEngine?.parse(mf.getValue(), {
-      canonical: false,
-    });
-  } else {
-    expr = globalThis.MathfieldElement.computeEngine?.parse(
-      mf.getValue(mf.model.selection),
-      { canonical: false }
-    );
-  }
-  if (!expr) return '';
-  let result = expr.evaluate();
-  // eslint-disable-next-line new-cap
-  if (result.isSame(expr)) result = expr.N();
-
-  return result.latex;
 }
 
 function variantMenuItem(
@@ -841,8 +736,7 @@ function variantStyleMenuItem(
 
     tooltip: () => localize(tooltip) ?? tooltip,
 
-    visible:
-      variantStyle === 'bold' ? true : () => validVariantStyleSelection(mf),
+    visible: true,
 
     checked: () =>
       ({ some: 'mixed', all: true })[mf.queryStyle({ variantStyle })] ?? false,
@@ -852,7 +746,7 @@ function variantStyleMenuItem(
   };
 }
 
-function insertMenu(mf: _Mathfield): MenuItem[] {
+function insertMenu(mf: InsertMenuTarget): MenuItem[] {
   return [
     {
       label: () => insertLabel('abs'),

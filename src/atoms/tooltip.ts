@@ -13,8 +13,8 @@ export class TooltipAtom extends Atom {
   constructor(
     options: CreateAtomOptions<[Argument | null, Argument | null]> & {
       content: 'math' | 'text';
-      body: Readonly<Atom[]> | undefined;
-      tooltip: Readonly<Atom[]> | undefined;
+      body: readonly Atom[] | undefined;
+      tooltip: readonly Atom[] | undefined;
     }
   ) {
     super({
@@ -51,7 +51,7 @@ export class TooltipAtom extends Atom {
   }
 
   render(context: Context): Box | null {
-    const body = Atom.createBox(new Context(), this.body);
+    const body = Atom.createBox(context, this.body);
     if (!body) return null;
 
     const tooltipContext = new Context(

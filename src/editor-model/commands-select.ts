@@ -65,13 +65,12 @@ function boundary(
   // Latex mode zone
   //
   if (atom.mode === 'latex') {
-    if (/[a-zA-Z\*]/.test(atom.value)) {
+    if (/[a-zA-Z\\*]/.test(atom.value)) {
       // Possible command
       if (direction === 'backward') {
         // Look backward until we find a non-letter or a backslash
         while (
-          atom &&
-          atom.mode === 'latex' &&
+          atom?.mode === 'latex' &&
           atom.value !== '\\' &&
           /[a-zA-Z]/.test(atom.value)
         ) {
@@ -80,7 +79,7 @@ function boundary(
         }
       } else {
         // Look backward until we find a non-letter or a star
-        while (atom && atom.mode === 'latex' && /[a-zA-Z\*]/.test(atom.value)) {
+        while (atom?.mode === 'latex' && /[a-zA-Z\\*]/.test(atom.value)) {
           pos += dir;
           atom = model.at(pos);
         }
@@ -88,7 +87,7 @@ function boundary(
     } else if (atom.value === '{') {
       if (direction === 'forward') {
         // Start of a group, select whole group
-        while (atom && atom.mode === 'latex' && atom.value !== '}') {
+        while (atom?.mode === 'latex' && atom.value !== '}') {
           pos += dir;
           atom = model.at(pos);
         }
@@ -97,7 +96,7 @@ function boundary(
       return pos - 1;
     } else if (atom.value === '}') {
       if (direction === 'backward') {
-        while (atom && atom.mode === 'latex' && atom.value !== '{') {
+        while (atom?.mode === 'latex' && atom.value !== '{') {
           pos += dir;
           atom = model.at(pos);
         }
@@ -125,15 +124,17 @@ function boundary(
     // In a styled area, select all the atoms with the same style
     //
     if (atom.style.variant || atom.style.variantStyle) {
-      let x = model.at(pos)?.style;
-      while (
-        x &&
-        x.variant === atom.style.variant &&
-        x.variantStyle === atom.style.variantStyle
-      ) {
-        x = model.at(pos + dir)?.style;
+      const targetVariant = atom.style.variant;
+      const targetVariantStyle = atom.style.variantStyle;
+
+      while (true) {
+        const nextAtom = model.at(pos + dir);
+        if (!nextAtom) break;
+        if (nextAtom.style.variant !== targetVariant) break;
+        if (nextAtom.style.variantStyle !== targetVariantStyle) break;
         pos += dir;
       }
+
       return direction === 'backward' ? pos - 1 : pos;
     }
 

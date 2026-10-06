@@ -12,8 +12,8 @@ import { atomToSpeakableText } from '../formats/atom-to-speakable-text';
  * @returns a string representation of the atoms as spoken text
  */
 function speakableText(
-  arg1: string | Atom | Readonly<Atom[]>,
-  arg2?: Atom | Readonly<Atom[]>
+  arg1: string | Atom | readonly Atom[],
+  arg2?: Atom | readonly Atom[]
 ): string {
   if (typeof arg1 === 'string') return arg1 + atomToSpeakableText(arg2!);
   return atomToSpeakableText(arg1);
@@ -81,6 +81,8 @@ function relationName(atom: Atom): string {
   } else if (atom.parentBranch === 'superscript') result = 'superscript';
   else if (atom.parentBranch === 'subscript') result = 'subscript';
 
+  // if (!result) console.log('unknown relationship');
+
   return result ?? 'parent';
 }
 
@@ -94,7 +96,7 @@ export function defaultAnnounceHook(
   mathfield: _Mathfield,
   action: AnnounceVerb,
   previousPosition?: number,
-  atoms?: Readonly<Atom[]>
+  atoms?: readonly Atom[]
 ): void {
   let liveText = '';
 
@@ -136,7 +138,7 @@ export function defaultAnnounceHook(
     // });
   } else liveText = atoms ? speakableText(action + ' ', atoms) : action;
 
-  if (liveText) {
+  if (liveText && mathfield.ariaLiveText) {
     // Aria-live regions are only spoken when it changes; force a change by
     // alternately using nonbreaking space or narrow nonbreaking space
     const ariaLiveChangeHack = mathfield.ariaLiveText.textContent!.includes(

@@ -265,9 +265,14 @@ function onDelete(
     return true;
   }
 
-  if (atom.type === 'extensible-symbol' || atom.type === 'subsup') {
+  if (
+    atom.type === 'extensible-symbol' ||
+    atom.type === 'subsup' ||
+    atom.type === 'operator'
+  ) {
     //
     // Extensible operator: \sum, \int, etc...
+    // Regular operator: \lim, \sin, etc...
     // Superscript/subscript carrier
     //
     if (!branch && direction === 'forward') return false;
@@ -296,6 +301,32 @@ function onDelete(
       return true;
     }
 
+    // Check if branch is empty and handle removal before navigation
+    if (branch && atom.hasEmptyBranch(branch)) {
+      atom.removeBranch(branch);
+      if (atom.type === 'subsup' && !atom.subscript && !atom.superscript) {
+        // We've removed the last branch of a subsup
+        const pos =
+          direction === 'forward'
+            ? model.offsetOf(atom)
+            : Math.max(0, model.offsetOf(atom) - 1);
+        atom.parent!.removeChild(atom);
+        model.position = pos;
+        return true;
+      }
+      // Branch was removed, navigate out
+      if (branch === 'superscript' && direction === 'backward')
+        model.position = model.offsetOf(atom.firstChild) - 1;
+      else if (branch === 'subscript' && direction === 'backward') {
+        if (atom.superscript)
+          model.position = model.offsetOf(atom.superscript[0].lastSibling);
+        else model.position = model.offsetOf(atom.firstChild) - 1;
+      } else model.position = model.offsetOf(atom);
+
+      return true;
+    }
+
+    // Branch is not empty, handle navigation within branches
     if (branch === 'superscript') {
       if (direction === 'backward') {
         const pos = model.offsetOf(atom.firstChild) - 1;
@@ -314,19 +345,6 @@ function onDelete(
       } else {
         // Subscript last: move after
         model.position = model.offsetOf(atom);
-      }
-    }
-
-    if (branch && atom.hasEmptyBranch(branch)) {
-      atom.removeBranch(branch);
-      if (atom.type === 'subsup' && !atom.subscript && !atom.superscript) {
-        // We've removed the last branch of a subsup
-        const pos =
-          direction === 'forward'
-            ? model.offsetOf(atom)
-            : Math.max(0, model.offsetOf(atom) - 1);
-        atom.parent!.removeChild(atom);
-        model.position = pos;
       }
     }
 
@@ -448,9 +466,26 @@ export function deleteBackward(model: _Model): boolean {
         return;
       }
 
+      const targetParent = target.parent!;
       model.position = model.offsetOf(target.leftSibling);
-      target.parent!.removeChild(target);
+      targetParent.removeChild(target);
       model.announce('delete', undefined, [target]);
+
+      // If deleting the last LaTeX atom leaves an empty LaTeX group, remove it
+      // so the caret is not trapped in command mode.
+      if (
+        targetParent.type === 'latexgroup' &&
+        targetParent.hasEmptyBranch('body')
+      ) {
+        const pos = model.offsetOf(targetParent.leftSibling);
+        targetParent.parent?.removeChild(targetParent);
+        model.position = Math.max(0, pos);
+      }
+
+      // If the field is now empty, flush the inline shortcut buffer
+      // to prevent stale shortcuts from being triggered (issue #2733)
+      if (model.root.hasEmptyBranch('body'))
+        model.mathfield.flushInlineShortcutBuffer();
     }
   );
 }
@@ -494,7 +529,8 @@ export function deleteForward(model: _Model): boolean {
         return;
       }
 
-      target.parent!.removeChild(target);
+      const targetParent = target.parent!;
+      targetParent.removeChild(target);
       let sibling = model.at(model.position)?.rightSibling;
       while (sibling?.type === 'subsup') {
         sibling.parent!.removeChild(sibling);
@@ -502,6 +538,21 @@ export function deleteForward(model: _Model): boolean {
       }
 
       model.announce('delete', undefined, [target]);
+
+      // Same cleanup as backward delete: don't keep an empty LaTeX group.
+      if (
+        targetParent.type === 'latexgroup' &&
+        targetParent.hasEmptyBranch('body')
+      ) {
+        const pos = model.offsetOf(targetParent.leftSibling);
+        targetParent.parent?.removeChild(targetParent);
+        model.position = Math.max(0, pos);
+      }
+
+      // If the field is now empty, flush the inline shortcut buffer
+      // to prevent stale shortcuts from being triggered (issue #2733)
+      if (model.root.hasEmptyBranch('body'))
+        model.mathfield.flushInlineShortcutBuffer();
     }
   );
 }
@@ -523,7 +574,7 @@ export function deleteRange(
   const result = model.getAtoms(range);
   if (result.length > 0 && result[0].parent) {
     //
-    //  multiline environment (`\displaylines`, `multline`, `split`, `gather`, etc...)
+    //  multiline environment (`\\displaylines`, `multline`, `split`, `gather`, etc...)
     //
     let parent: Atom | undefined = result[0];
     while (parent && !(parent instanceof ArrayAtom)) parent = parent.parent;
@@ -549,20 +600,64 @@ export function deleteRange(
         ];
         const rowSpan = endRow - startRow + 1;
 
-        if (rowSpan === 2) {
-          // // If the selection spans two rows, delete the entire row
-          // parentArray.removeRow(startRow);
-          // model.position = model.offsetOf(parentArray.getCell(startRow, 0)!);
-          // return true;
-        }
+        if (rowSpan >= 2) {
+          return model.deferNotifications(
+            { content: true, selection: true, type },
+            () => {
+              // Check if cells exist
+              const startCell = parentArray.getCell(startRow, startColumn);
+              const endCell = parentArray.getCell(endRow, endColumn);
+              if (!startCell || !endCell) return;
 
-        if (rowSpan > 2) {
-          // More than two span: delete the selection, then rows in the middle
-          model.extractAtoms([startOffset, endOffset]);
-          for (let i = startRow + 1; i < endRow; i++) parentArray.removeRow(i);
-          model.position = startOffset;
+              // Delete the atoms in the selection
+              model.extractAtoms([startOffset, endOffset]);
 
-          return true;
+              // Get what remains in each cell after extraction
+              const remainingStart = parentArray.getCell(startRow, startColumn);
+              const remainingEnd = parentArray.getCell(endRow, endColumn);
+
+              // Remove middle rows (if any) - iterate backwards to maintain indices
+              for (let i = endRow - 1; i > startRow; i--)
+                parentArray.removeRow(i);
+
+              // If start and end were on different rows, merge them
+              if (startRow !== endRow) {
+                // After removing middle rows, the end row is now at startRow + 1
+                const nowRemainingEnd = parentArray.getCell(
+                  startRow + 1,
+                  startColumn
+                );
+
+                if (remainingStart && nowRemainingEnd) {
+                  // Merge: content from start row + content from end row
+                  const mergedContent = [
+                    ...remainingStart.filter((x) => x.type !== 'first'),
+                    ...nowRemainingEnd.filter((x) => x.type !== 'first'),
+                  ];
+
+                  // Update the start row with merged content
+                  parentArray.setCell(startRow, startColumn, mergedContent);
+
+                  // Remove the end row
+                  parentArray.removeRow(startRow + 1);
+                }
+              }
+
+              // Position cursor at the merge point
+              const mergedCell = parentArray.getCell(startRow, startColumn);
+              if (mergedCell) {
+                // Position should be right after what was in the start row originally
+                const targetIndex = remainingStart
+                  ? remainingStart.filter((x) => x.type !== 'first').length
+                  : 0;
+                model.position = model.offsetOf(
+                  mergedCell[targetIndex] ?? mergedCell[0]
+                );
+              } else model.position = startOffset;
+
+              parentArray.isDirty = true;
+            }
+          );
         }
       }
     }
@@ -579,7 +674,7 @@ export function deleteRange(
     const lastSelected = result[result.length - 1];
 
     // If we're deleting all the children, also delete the parent
-    // (for example for surd/\sqrt)
+    // (for example for surd/\\sqrt)
     if (firstSelected === firstChild && lastSelected === lastChild) {
       const parent = result[0].parent!;
       if (parent.parent && parent.type !== 'prompt')
@@ -614,7 +709,198 @@ export function deleteRange(
   }
   return model.deferNotifications(
     { content: true, selection: true, type },
-    () => model.deleteAtoms(range)
+    () => {
+      // Track special atom parents and their relationship to the selection
+      const specialAtomInfo = new Map<
+        Atom,
+        {
+          containsStart: boolean;
+          containsEnd: boolean;
+        }
+      >();
+
+      if (result.length > 0) {
+        // Check if the start and end of the selection are in different contexts
+        const startAtom = result[0];
+        const endAtom = result[result.length - 1];
+
+        // Find all special atom ancestors for both start and end
+        const startAncestors = new Set<Atom>();
+        let p = startAtom.parent;
+        while (p) {
+          if (
+            (p.type === 'surd' ||
+              p.type === 'box' ||
+              p.type === 'enclose' ||
+              p.type === 'leftright' ||
+              p.type === 'genfrac' ||
+              p.type === 'overunder') &&
+            p.parent
+          )
+            startAncestors.add(p);
+
+          p = p.parent;
+        }
+
+        const endAncestors = new Set<Atom>();
+        p = endAtom.parent;
+        while (p) {
+          if (
+            (p.type === 'surd' ||
+              p.type === 'box' ||
+              p.type === 'enclose' ||
+              p.type === 'leftright' ||
+              p.type === 'genfrac' ||
+              p.type === 'overunder') &&
+            p.parent
+          )
+            endAncestors.add(p);
+
+          p = p.parent;
+        }
+
+        // Collect all special atoms that are ancestors of any atom in the selection
+        for (const atom of result) {
+          p = atom.parent;
+          while (p) {
+            if (
+              (p.type === 'surd' ||
+                p.type === 'box' ||
+                p.type === 'enclose' ||
+                p.type === 'leftright' ||
+                p.type === 'genfrac' ||
+                p.type === 'overunder') &&
+              p.parent
+            ) {
+              if (!specialAtomInfo.has(p)) {
+                specialAtomInfo.set(p, {
+                  containsStart: startAncestors.has(p),
+                  containsEnd: endAncestors.has(p),
+                });
+              }
+              break; // Only track the innermost special atom
+            }
+            p = p.parent;
+          }
+        }
+      }
+
+      // Delete the atoms
+      const startPos = Math.min(...range);
+      model.deleteAtoms(range);
+
+      // After deletion, check if any special atoms should be removed or hoisted
+      for (const [specialAtom, info] of specialAtomInfo) {
+        // Check if the atom still exists (it might have been deleted)
+        if (!specialAtom.parent) continue;
+
+        // Check if this was a boundary-crossing deletion
+        // (selection started outside and ended inside, or vice versa)
+        const isBoundaryCrossing = info.containsStart !== info.containsEnd;
+
+        // For surd/box/enclose/leftright: handle both empty and boundary-crossing cases
+        if (
+          specialAtom.type === 'surd' ||
+          specialAtom.type === 'box' ||
+          specialAtom.type === 'enclose' ||
+          specialAtom.type === 'leftright'
+        ) {
+          const body = specialAtom.branch('body');
+          const bodyEmpty =
+            !body ||
+            body.length === 0 ||
+            (body.length === 1 && body[0].type === 'placeholder');
+
+          if (bodyEmpty) {
+            // Body is empty, remove the special atom
+            const pos = model.offsetOf(specialAtom.leftSibling);
+            specialAtom.parent.removeChild(specialAtom);
+            model.position = Math.max(0, pos);
+          } else if (
+            isBoundaryCrossing &&
+            !info.containsStart &&
+            info.containsEnd
+          ) {
+            // Selection started outside and ended inside - hoist remaining content
+            const pos = model.offsetOf(specialAtom.leftSibling);
+            const content = specialAtom.removeBranch('body');
+            if (content && content.length > 0)
+              specialAtom.parent.addChildrenAfter(content, specialAtom);
+
+            specialAtom.parent.removeChild(specialAtom);
+            model.position = Math.max(0, pos);
+          }
+        }
+
+        // For genfrac: if both branches are empty/placeholder, remove it
+        // If one branch is empty, hoist the other
+        // Also handle boundary-crossing deletions
+        if (specialAtom.type === 'genfrac') {
+          const above = specialAtom.branch('above');
+          const below = specialAtom.branch('below');
+
+          const aboveEmpty =
+            !above ||
+            above.length === 0 ||
+            (above.length === 1 && above[0].type === 'placeholder');
+          const belowEmpty =
+            !below ||
+            below.length === 0 ||
+            (below.length === 1 && below[0].type === 'placeholder');
+
+          if (aboveEmpty && belowEmpty) {
+            // Both empty, remove the fraction
+            const pos = model.offsetOf(specialAtom.leftSibling);
+            specialAtom.parent.removeChild(specialAtom);
+            model.position = Math.max(0, pos);
+          } else if (aboveEmpty && !belowEmpty) {
+            // Hoist the denominator
+            const pos = model.offsetOf(specialAtom.leftSibling);
+            const content = specialAtom.removeBranch('below');
+            if (content && content.length > 0)
+              specialAtom.parent.addChildrenAfter(content, specialAtom);
+
+            specialAtom.parent.removeChild(specialAtom);
+            model.position = Math.max(0, pos);
+          } else if (!aboveEmpty && belowEmpty) {
+            // Hoist the numerator
+            const pos = model.offsetOf(specialAtom.leftSibling);
+            const content = specialAtom.removeBranch('above');
+            if (content && content.length > 0)
+              specialAtom.parent.addChildrenAfter(content, specialAtom);
+
+            specialAtom.parent.removeChild(specialAtom);
+            model.position = Math.max(0, pos);
+          } else if (
+            isBoundaryCrossing &&
+            !info.containsStart &&
+            info.containsEnd
+          ) {
+            // Selection started outside and ended inside - hoist whatever remains
+            // For fractions, we need to check which branch has content and hoist it
+            if (!aboveEmpty && !belowEmpty) {
+              // Both have content - this is a more complex case
+              // For now, just hoist the numerator
+              const pos = model.offsetOf(specialAtom.leftSibling);
+              const content = specialAtom.removeBranch('above');
+              if (content && content.length > 0)
+                specialAtom.parent.addChildrenAfter(content, specialAtom);
+
+              specialAtom.parent.removeChild(specialAtom);
+              model.position = Math.max(0, pos);
+            }
+          }
+        }
+      }
+
+      // Set position to where deletion started if not already set
+      if (specialAtomInfo.size === 0) model.position = startPos;
+
+      // If the field is now empty, flush the inline shortcut buffer
+      // to prevent stale shortcuts from being triggered (issue #2733)
+      if (model.root.hasEmptyBranch('body'))
+        model.mathfield.flushInlineShortcutBuffer();
+    }
   );
 }
 
@@ -633,20 +919,44 @@ function deleteRow(
   if (atom.rows[row].length > 1) return false;
 
   // Capture the content of the current cell
-  const content = atom.getCell(row, 0)!;
+  const content = atom.getCell(row, 0);
+  if (!content) return false;
 
   atom.removeRow(row);
 
   // If going backward, move to the end of the previous line
   if (direction === 'backward') {
-    const prevLine = atom.getCell(row - 1, 0)!;
-    model.position = model.offsetOf(prevLine[prevLine.length - 1]);
+    const prevLine = atom.getCell(row - 1, 0);
+    if (!prevLine) {
+      // If we can't get the previous line, just position at the array
+      model.position = model.offsetOf(atom);
+      return true;
+    }
+
+    // Handle empty prevLine - position at the array itself instead of trying to access prevLine[length-1]
+    if (prevLine.length > 0)
+      model.position = model.offsetOf(prevLine[prevLine.length - 1]);
+    else {
+      // prevLine is empty - position at the array atom itself
+      model.position = model.offsetOf(atom);
+    }
     // Add content from the deleted cell to the end of the previous line
     atom.setCell(row - 1, 0, [...prevLine, ...content]);
   } else {
     // If going forward, move to the beginning of the next line
-    const nextLine = atom.getCell(row, 0)!;
-    model.position = model.offsetOf(nextLine[0]);
+    const nextLine = atom.getCell(row, 0);
+    if (!nextLine) {
+      // If we can't get the next line, just position at the array
+      model.position = model.offsetOf(atom);
+      return true;
+    }
+
+    // Handle empty nextLine - position at the array itself instead of trying to access nextLine[0]
+    if (nextLine.length > 0) model.position = model.offsetOf(nextLine[0]);
+    else {
+      // nextLine is empty - position at the array atom itself
+      model.position = model.offsetOf(atom);
+    }
     // Add content from the deleted cell to the beginning of the next line
     atom.setCell(row, 0, [...content, ...nextLine]);
   }

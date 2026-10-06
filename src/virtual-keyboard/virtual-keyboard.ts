@@ -35,8 +35,10 @@ import {
 } from './utils';
 
 import { hideVariantsPanel, showVariantsPanel } from './variants';
+import { hideInsertMenu } from './insert-menu';
 import { Style } from '../public/core-types';
 import { deepActiveElement } from '../ui/events/utils';
+import { _Mathfield } from 'editor-mathfield/mathfield-private';
 
 export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
   private _visible: boolean;
@@ -146,16 +148,16 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
     this.rebuild();
   }
 
-  private _layouts: Readonly<(VirtualKeyboardName | VirtualKeyboardLayout)[]>;
+  private _layouts: readonly (VirtualKeyboardName | VirtualKeyboardLayout)[];
 
-  get layouts(): Readonly<(VirtualKeyboardName | VirtualKeyboardLayout)[]> {
+  get layouts(): readonly (VirtualKeyboardName | VirtualKeyboardLayout)[] {
     return this._layouts;
   }
   set layouts(
     value:
       | 'default'
       | (VirtualKeyboardName | VirtualKeyboardLayout)[]
-      | Readonly<(VirtualKeyboardName | VirtualKeyboardLayout)[]>
+      | readonly (VirtualKeyboardName | VirtualKeyboardLayout)[]
   ) {
     this.updateNormalizedLayouts(value);
     this.rebuild();
@@ -165,7 +167,7 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
     value:
       | 'default'
       | (VirtualKeyboardName | VirtualKeyboardLayout)[]
-      | Readonly<(VirtualKeyboardName | VirtualKeyboardLayout)[]>
+      | readonly (VirtualKeyboardName | VirtualKeyboardLayout)[]
   ): void {
     const layouts = Array.isArray(value) ? [...value] : [value];
     const defaultIndex = layouts.findIndex((x) => x === 'default');
@@ -220,6 +222,7 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
 
   targetOrigin: string;
   originValidator: OriginValidator;
+  isSandbox: boolean = false;
 
   private static _singleton: VirtualKeyboard | null;
   static get singleton(): VirtualKeyboard | null {
@@ -270,26 +273,25 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
     /* whether the virtual keyboard is shown when focused
     // Listen for when a mathfield gets focused, and show
     // the virtual keyboard if needed
-    document.addEventListener('focusin', (event: FocusEvent) => {
-      const target = event.target as HTMLElement;
-      if (!target?.isConnected) return;
-      setTimeout(() => {
-        const mf = focusedMathfield();
-        if (
-          mf &&
-          !mf.readOnly &&
-          mf.mathVirtualKeyboardPolicy === 'auto' &&
-          isTouchCapable()
-        )
-          this.show({ animate: true });
-      }, 300);
-    });
+    if (isTouchCapable()) {
+      document.addEventListener('focusin', (event: FocusEvent) => {
+        const target = event.target as HTMLElement;
+        if (!target?.isConnected) return;
+        setTimeout(() => {
+          const mf = focusedMathfield();
+          if (!mf) return;
+          if (mf.mathVirtualKeyboardPolicy === 'auto' && mf.hasEditableContent)
+            this.show({ animate: true });
+        }, 300);
+      });
+    }
 
     document.addEventListener('focusout', (evt) => {
       if (!(evt.target instanceof MathfieldElement)) return;
       if (evt.target.mathVirtualKeyboardPolicy !== 'manual') {
         // If after a short delay the active element is no longer
-        // a mathfield (or there is no active element), hide the virtual keyboard
+        // a mathfield (or there is no active element),
+        // hide the virtual keyboard
 
         setTimeout(() => {
           if (!focusedMathfield()) this.hide();
@@ -370,7 +372,7 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
     if (this.container === document.body) {
       this._element.style.setProperty(
         '--_keyboard-height',
-        `calc(${h}px + var(--_padding-top) + var(--_padding-bottom) + env(safe-area-inset-bottom, 0))`
+        `calc(${h}px + var(--_padding-top) + var(--_padding-bottom))`
       );
       const keyboardHeight = h - 1;
       this.container!.style.paddingBottom = this.originalContainerBottomPadding
@@ -412,6 +414,7 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
 
       // By the time the handler is called, the _element may have been destroyed
       if (this._element) {
+        hideInsertMenu();
         this._element.remove();
         this._element = undefined;
       }
@@ -556,6 +559,7 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
       window.removeEventListener('keyup', this, { capture: true });
       window.removeEventListener('contextmenu', this, { capture: true });
       hideVariantsPanel();
+      hideInsertMenu();
 
       releaseStylesheets();
 
@@ -610,9 +614,12 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
           'SecurityError'
         );
       }
-      if (evt.data.action === 'disconnect')
+      if (evt.data.action === 'disconnect') {
+        // Ignore ALL disconnect requests while VK is visible
+        if (this._visible) return;
+
         this.connectedMathfieldWindow = undefined;
-      else if (
+      } else if (
         evt.data.action !== 'update-setting' &&
         evt.data.action !== 'proxy-created' &&
         evt.data.action !== 'execute-command'
@@ -663,11 +670,15 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
     const { action } = msg;
     if (action === 'execute-command') {
       const { command } = msg;
-
-      // Avoid an infinite messages loop if within one window
       const commandTarget = getCommandTarget(command!);
-      if (window.top !== undefined && commandTarget !== 'virtual-keyboard')
-        return;
+
+      // If we're in the top window and receiving a message from an iframe,
+      // don't handle it here (the iframe's mathfield will handle it)
+      if (window === window.top && source !== window) return;
+
+      // If we're receiving our own message for a mathfield command,
+      // don't re-execute it here (the local mathfield will handle it)
+      if (source === window && commandTarget !== 'virtual-keyboard') return;
 
       this.executeCommand(command!);
       return;
@@ -693,7 +704,7 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
     // browsing context. If that's the case, safely ignored messages that could
     // be dispatched from other mathfields, as we will only respond to
     // direct invocation via function dispatching on the VK instance.
-    if (window !== window.top) return;
+    if (this.isSandbox) return;
 
     if (action === 'show') {
       if (typeof msg.animate !== 'undefined')
@@ -754,7 +765,6 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
     }
 
     if (!target) target = this.connectedMathfieldWindow;
-
     if (
       this.targetOrigin === null ||
       this.targetOrigin === 'null' ||
@@ -763,6 +773,7 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
       window.dispatchEvent(
         new MessageEvent('message', {
           source: window,
+          origin: window.origin,
           data: {
             type: VIRTUAL_KEYBOARD_MESSAGE,
             action,
@@ -847,7 +858,7 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
     el.classList.toggle('can-undo', mf.canUndo);
     el.classList.toggle('can-redo', mf.canRedo);
     el.classList.toggle('can-copy', !mf.selectionIsCollapsed);
-    el.classList.toggle('can-copy', !mf.selectionIsCollapsed);
+    el.classList.toggle('can-cut', !mf.selectionIsCollapsed); // @fixme: Should check if readonly
     el.classList.toggle('can-paste', true);
 
     const toolbars = el.querySelectorAll('.ML__edit-toolbar');
@@ -866,6 +877,9 @@ export class VirtualKeyboard implements VirtualKeyboardInterface, EventTarget {
   }
 
   disconnect(): void {
+    // Ignore ALL disconnect requests while VK is visible
+    if (this._visible) return;
+
     this.connectedMathfieldWindow = undefined;
   }
 

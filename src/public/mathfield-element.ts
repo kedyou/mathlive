@@ -43,8 +43,6 @@ import {
 import { reloadFonts, loadFonts } from '../core/fonts';
 import { defaultSpeakHook } from '../editor/speech';
 import { defaultReadAloudHook } from '../editor/speech-read-aloud';
-import type { ComputeEngine } from '@cortex-js/compute-engine';
-
 import { l10n } from '../core/l10n';
 import { getStylesheet, getStylesheetContent } from '../common/stylesheet';
 import { Scrim } from '../ui/utils/scrim';
@@ -142,7 +140,7 @@ const gDeferredState = new WeakMap<
     value: string | undefined;
     selection: Selection;
     options: Partial<MathfieldOptions>;
-    menuItems: Readonly<MenuItem[]> | undefined;
+    menuItems: readonly MenuItem[] | undefined;
   }
 >();
 
@@ -386,18 +384,18 @@ const DEPRECATED_OPTIONS = {
  * document.body.style.setProperty("--hue", "10");
  * ```
  *
- * Read more about the [CSS variables](/mathfield/guides/customizing/#css-variables) available for customization.
+ * Read more about the [CSS variables](https://mathlive.io/mathfield/guides/customizing/#css-variables) available for customization.
  *
  * You can customize the appearance and zindex of the virtual keyboard panel
  * with some CSS variables associated with a selector that applies to the
  * virtual keyboard panel container.
  *
- * Read more about [customizing the virtual keyboard appearance](/mathfield/guides/virtual-keyboards/#custom-appearance)
+ * Read more about [customizing the virtual keyboard appearance](https://mathlive.io/mathfield/guides/virtual-keyboard/#custom-appearance)
  *
  * #### MathfieldElement CSS Parts
  *
  * In addition to the CSS variables, the mathfield exposes [CSS
- * parts that can be used to style the mathfield](/mathfield/guides/customizing/#mathfield-parts).
+ * parts that can be used to style the mathfield](https://mathlive.io/mathfield/guides/customizing/#mathfield-parts).
  *
  * For example, to hide the menu button:
  *
@@ -549,7 +547,7 @@ export class MathfieldElement extends HTMLElement implements Mathfield {
    * Custom elements lifecycle hooks
    * @internal
    */
-  static get observedAttributes(): Readonly<string[]> {
+  static get observedAttributes(): readonly string[] {
     return [
       ...Object.keys(this.optionsAttributes),
       'contenteditable', // Global attribute
@@ -1007,8 +1005,9 @@ export class MathfieldElement extends HTMLElement implements Mathfield {
   static set decimalSeparator(value: ',' | '.') {
     this._decimalSeparator = value;
     if (this._computeEngine) {
-      this._computeEngine.decimalSeparator =
-        this.decimalSeparator === ',' ? '{,}' : '.';
+      console.warn(
+        `MathLive {{SDK_VERSION}}: setting MathfieldElement.decimalSeparator after the Compute Engine has been created has no effect on the engine. Reassign MathfieldElement.computeEngine with a freshly configured instance to apply the new separator.`
+      );
     }
   }
 
@@ -1023,6 +1022,32 @@ export class MathfieldElement extends HTMLElement implements Mathfield {
 
   /** @internal */
   private static _decimalSeparator: ',' | '.' = '.';
+
+  /** The template used to format numbers in scientific notation.
+   * The template should include the placeholders `#1` and `#2`, which will
+   * be replaced by the significand and exponent, respectively.
+   *
+   * The template is used when typing a number in scientific notation, e.g.
+   * `1.23e4`, which will be rendered as `1.23×10^4`.
+   *
+   * **Default**: `'#1\\times10^{#2}'`
+   *
+   * Other common formats include:
+   * - `'#1\\,\\mathrm{E}\\mathop{#2}'` (e.g. `1.23\,\mathrm{E}\mathop{-4}`)
+   *
+   * @category Localization
+   */
+  static set scientificNotationTemplate(value: string | null) {
+    this._scientificNotationTemplate = value;
+  }
+
+  static get scientificNotationTemplate(): string | null {
+    return this._scientificNotationTemplate;
+  }
+
+  /** @internal */
+  private static _scientificNotationTemplate: string | null =
+    '#1\\times10^{#2}';
 
   /**
    * When using the keyboard to navigate a fraction, the order in which the
@@ -1059,21 +1084,36 @@ export class MathfieldElement extends HTMLElement implements Mathfield {
    * A custom compute engine instance. If none is provided, a default one is
    * used. If `null` is specified, no compute engine is used.
    */
-  static get computeEngine(): ComputeEngine | null {
+  static get computeEngine(): any | null {
     if (this._computeEngine === undefined) {
-      const ComputeEngineCtor =
-        window[Symbol.for('io.cortexjs.compute-engine')]?.ComputeEngine;
+      const globalComputeEngine =
+        window[Symbol.for('io.cortexjs.compute-engine')];
+      const ComputeEngineCtor = globalComputeEngine?.ComputeEngine;
 
       if (!ComputeEngineCtor) return null;
 
       this._computeEngine = new ComputeEngineCtor();
 
-      if (this._computeEngine && this.decimalSeparator === ',')
-        this._computeEngine.decimalSeparator = '{,}';
+      if (this._computeEngine && this.decimalSeparator === ',') {
+        // Setting the decimal separator uses the public `latexOptions` API,
+        // introduced in Compute Engine 0.58. Older engines (which may be
+        // loaded from a CDN) have no public way to set it, so if the loaded
+        // engine is older than expected we leave the separator at its default
+        // rather than reach into private internals.
+        const [major, minor] = String(globalComputeEngine?.version ?? '')
+          .split('.')
+          .map((x) => parseInt(x, 10));
+        if (major > 0 || (major === 0 && minor >= 58)) {
+          this._computeEngine.latexOptions = {
+            ...this._computeEngine.latexOptions,
+            decimalSeparator: '{,}',
+          };
+        }
+      }
     }
     return this._computeEngine ?? null;
   }
-  static set computeEngine(value: ComputeEngine | null) {
+  static set computeEngine(value: any | null) {
     this._computeEngine = value;
   }
 
@@ -1087,7 +1127,7 @@ export class MathfieldElement extends HTMLElement implements Mathfield {
   }
 
   /** @internal */
-  private static _computeEngine: ComputeEngine | null;
+  private static _computeEngine: any | null;
 
   /** @internal */
   private static _isFunction: (command: string) => boolean = (command) => {
@@ -1401,6 +1441,11 @@ export class MathfieldElement extends HTMLElement implements Mathfield {
     return this._mathfield?.getPrompts(filter) ?? [];
   }
 
+  /** True if the mathfield has editable content, such as unlocked prompts */
+  get hasEditableContent(): boolean {
+    return this._mathfield?.hasEditableContent ?? false;
+  }
+
   /** @internal */
   get form(): HTMLFormElement | null {
     return this._internals?.['form'];
@@ -1428,51 +1473,10 @@ export class MathfieldElement extends HTMLElement implements Mathfield {
   }
 
   /**
-   * If the Compute Engine library is available, return a boxed MathJSON expression representing the value of the mathfield.
-   *
-   * To load the Compute Engine library, use:
-   * ```js
-import 'https://esm.run/@cortex-js/compute-engine';
-```
-   *
-   * @category Accessing and changing the content
-   */
-  get expression(): any | null {
-    if (!this._mathfield) return undefined;
-    if (!window[Symbol.for('io.cortexjs.compute-engine')]) {
-      console.error(
-        `MathLive {{SDK_VERSION}}: The CortexJS Compute Engine library is not available.
-        
-        Load the library, for example with:
-        
-        import "https://esm.run/@cortex-js/compute-engine"`
-      );
-      return null;
-    }
-    return this._mathfield.expression;
-  }
-
-  set expression(mathJson: Expression | any) {
-    if (!this._mathfield) return;
-    const latex = MathfieldElement.computeEngine?.box(mathJson).latex ?? null;
-    if (latex !== null) this._mathfield.setValue(latex);
-
-    if (!window[Symbol.for('io.cortexjs.compute-engine')]) {
-      console.error(
-        `MathLive {{SDK_VERSION}}: The Compute Engine library is not available.
-        
-        Load the library, for example with:
-        
-        import "https://esm.run/@cortex-js/compute-engine"`
-      );
-    }
-  }
-
-  /**
    * Return an array of LaTeX syntax errors, if any.
    * @category Accessing and changing the content
    */
-  get errors(): Readonly<LatexSyntaxError[]> {
+  get errors(): readonly LatexSyntaxError[] {
     return this._mathfield?.errors ?? [];
   }
 
@@ -1534,7 +1538,8 @@ import 'https://esm.run/@cortex-js/compute-engine';
     const defaultOptions = getDefaultOptions();
     const options = this._getOptions();
     Object.keys(MathfieldElement.optionsAttributes).forEach((x) => {
-      const prop = toCamelCase(x);
+      // Handle special case: 'placeholder' attribute maps to 'contentPlaceholder' option
+      const prop = x === 'placeholder' ? 'contentPlaceholder' : toCamelCase(x);
       if (MathfieldElement.optionsAttributes[x] === 'on/off') {
         if (defaultOptions[prop] !== options[prop])
           this.setAttribute(x, options[prop] ? 'on' : 'off');
@@ -1672,13 +1677,7 @@ import 'https://esm.run/@cortex-js/compute-engine';
   /**
    * Return a textual representation of the content of the mathfield.
    *
-   * @param format - The format of the result. If using `math-json`
-   * the Compute Engine library must be loaded, for example with:
-   *
-   * ```js
-import "https://esm.run/@cortex-js/compute-engine";
-```
-   *
+   * @param format - The format of the result.
    *
    * **Default:** `"latex"`
    *
@@ -1782,6 +1781,7 @@ import "https://esm.run/@cortex-js/compute-engine";
    *
    */
   focus(): void {
+    if (this.disabled) return;
     this._mathfield?.focus();
   }
 
@@ -1922,17 +1922,11 @@ import "https://esm.run/@cortex-js/compute-engine";
     // Also, if the menu is open
     if (this._mathfield?.menu?.state !== 'closed') return;
 
-    if (evt.type === 'pointerdown') {
-      this.onPointerDown();
-      // Some browsers (Firefox, Chrome) will get into a zombie focus state
-      // if the padding area is clicked on when the mathfield was already
-      // focused. We force the keyboard delegate to blur and refocus to
-      // prevent this.
-      const kbdDelegate = this._mathfield?.keyboardDelegate;
-      kbdDelegate?.blur();
-      kbdDelegate?.focus();
-    }
-    if (evt.type === 'focus') this._mathfield?.focus();
+    if (evt.type === 'pointerdown') this.onPointerDown();
+
+    // The private mathfield handles focus/blur events directly,
+    // so we don't need to call focus() or blur() here
+    if (evt.type === 'focus') return;
 
     // Ignore blur events if the scrim is open (case where the variant panel
     // is open), or if we're in an iFrame on a touch device (see #2350).
@@ -1945,7 +1939,9 @@ import "https://esm.run/@cortex-js/compute-engine";
     // Otherwise we disconnect from the VK and end up in a weird state.
     if (Scrim.scrim?.state !== 'closed' || (touch && isInIframe())) return;
 
-    this._mathfield?.blur();
+    // Call onBlur directly to handle the blur, without dispatching events
+    // (the DOM already dispatched them)
+    this._mathfield?.onBlur({ dispatchEvents: false });
   }
 
   /**
@@ -2246,7 +2242,7 @@ import "https://esm.run/@cortex-js/compute-engine";
     this._setOptions({ defaultMode: value });
   }
 
-  /** 
+  /**
    * A dictionary of LaTeX macros to be used to interpret and render the content.
    *
    * For example, to add a new macro to the default macro dictionary:
@@ -2357,7 +2353,7 @@ mf.macros = {
     this._setOptions({ backgroundColorMap: value });
   }
 
-  /** 
+  /**
   * Control the letter shape style:
 
   | `letterShapeStyle` | xyz | ABC | αβɣ | ΓΔΘ |
@@ -2384,8 +2380,8 @@ mf.macros = {
   * As for roman uppercase, they are recommended by "Lexique des règles
   * typographiques en usage à l’Imprimerie Nationale". It should be noted
   * that this convention is not universally followed.
-  * 
-  * @category Customization 
+  *
+  * @category Customization
 */
   get letterShapeStyle(): 'auto' | 'tex' | 'iso' | 'french' | 'upright' {
     return this._getOption('letterShapeStyle');
@@ -2581,12 +2577,11 @@ mf.macros = {
    * @category Customization
    */
   get placeholder(): string {
-    return this.getAttribute('placeholder') ?? '';
+    return this._getOption('contentPlaceholder');
   }
 
   set placeholder(value: string) {
-    if (typeof value !== 'string') return;
-    this._mathfield?.setOptions({ contentPlaceholder: value });
+    this._setOptions({ contentPlaceholder: value });
   }
 
   /**
@@ -2624,12 +2619,12 @@ mf.macros = {
    * @category Menu
    */
 
-  get menuItems(): Readonly<MenuItem[]> {
+  get menuItems(): readonly MenuItem[] {
     if (!this._mathfield) throw new Error('Mathfield not mounted');
     return this._mathfield.menu._menuItems.map((x) => x.menuItem) ?? [];
   }
 
-  set menuItems(menuItems: Readonly<MenuItem[]>) {
+  set menuItems(menuItems: readonly MenuItem[]) {
     if (!this._mathfield) throw new Error('Mathfield not mounted');
     if (this._mathfield) {
       const btn =
@@ -2696,11 +2691,11 @@ mf.macros = {
   }
 
   /** @category Keyboard Shortcuts   */
-  get keybindings(): Readonly<Keybinding[]> {
+  get keybindings(): readonly Keybinding[] {
     if (!this._mathfield) throw new Error('Mathfield not mounted');
     return this._getOption('keybindings');
   }
-  set keybindings(value: Readonly<Keybinding[]>) {
+  set keybindings(value: readonly Keybinding[]) {
     if (!this._mathfield) throw new Error('Mathfield not mounted');
     this._setOptions({ keybindings: value });
   }
@@ -2798,14 +2793,6 @@ mf.macros = {
   /** @category Prompts */
   getPromptState(id: string): ['correct' | 'incorrect' | undefined, boolean] {
     return this._mathfield?.getPromptState(id) ?? [undefined, true];
-  }
-
-  /** @category Virtual Keyboard */
-  get virtualKeyboardTargetOrigin(): string {
-    return this._getOption('virtualKeyboardTargetOrigin');
-  }
-  set virtualKeyboardTargetOrigin(value: string) {
-    this._setOptions({ virtualKeyboardTargetOrigin: value });
   }
 
   /**
